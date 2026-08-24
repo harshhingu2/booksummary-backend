@@ -161,25 +161,9 @@ const styles: { [key: string]: React.CSSProperties } = {
     borderRadius: "50%",
     animation: "spin 1s linear infinite",
   },
-  layout: {
-    display: "flex",
-    minHeight: "100vh",
-    backgroundColor: "#0F172A",
-    color: "#F8FAFC",
-    fontFamily: "-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif",
-  },
-  sidebar: {
-    width: "260px",
-    backgroundColor: "#1E293B",
-    borderRight: "1px solid #334155",
-    display: "flex",
-    flexDirection: "column",
-    justifyContent: "space-between",
-    padding: "24px 16px",
-    position: "sticky",
-    top: 0,
-    height: "100vh",
-  },
+  layout: {},
+  sidebar: {},
+
   logoBox: {
     display: "flex",
     alignItems: "center",
@@ -305,10 +289,7 @@ const styles: { [key: string]: React.CSSProperties } = {
     cursor: "pointer",
     padding: "4px 8px",
   },
-  mainContent: {
-    flex: 1,
-    padding: "36px 40px",
-    overflowY: "auto",
-  },
+  mainContent: {},
 };
+
 

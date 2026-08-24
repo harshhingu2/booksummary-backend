@@ -28,6 +28,7 @@ body {
 /* Admin Responsive Sidebar Styles */
 .admin-layout {
   display: flex;
+  flex-direction: column;
   min-height: 100vh;
   background-color: #0F172A;
   color: #F8FAFC;
@@ -62,6 +63,7 @@ body {
   transform: translateX(-100%);
   transition: transform 0.3s ease-in-out;
   box-shadow: 4px 0 24px rgba(0, 0, 0, 0.3);
+  height: 100vh;
 }
 
 .admin-sidebar.open {
@@ -92,6 +94,10 @@ body {
 }
 
 @media (min-width: 768px) {
+  .admin-layout {
+    flex-direction: row;
+  }
+
   .admin-mobile-header {
     display: none;
   }
@@ -113,4 +119,5 @@ body {
     padding: 36px 40px;
   }
 }
+
 
