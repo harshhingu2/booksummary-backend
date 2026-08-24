@@ -1,6 +1,6 @@
 "use client";
 
-import React from "react";
+import React, { useState, useEffect } from "react";
 import { useSession, signOut } from "next-auth/react";
 import { usePathname, useRouter } from "next/navigation";
 import Link from "next/link";
@@ -9,6 +9,12 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
   const { data: session, status } = useSession();
   const pathname = usePathname();
   const router = useRouter();
+  const [isMobileOpen, setIsMobileOpen] = useState(false);
+
+  // Auto-close sidebar on window resize to desktop or on pathname change
+  useEffect(() => {
+    setIsMobileOpen(false);
+  }, [pathname]);
 
   const isLoginPage = pathname === "/admin/login" || pathname === "/login";
 
@@ -51,35 +57,69 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
   ];
 
   return (
-    <div style={styles.layout}>
-      {/* Sidebar */}
-      <aside style={styles.sidebar}>
-        <div style={styles.logoBox}>
-          <span style={styles.logoIcon}>📜</span>
-          <div>
-            <h1 style={styles.logoTitle}>DumbScroll</h1>
-            <span style={styles.logoBadge}>{role} PORTAL</span>
-          </div>
+    <div className="admin-layout" style={styles.layout}>
+      {/* Mobile Top Navigation Header */}
+      <header className="admin-mobile-header">
+        <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+          <span style={{ fontSize: "1.5rem" }}>📜</span>
+          <span style={{ fontWeight: 700, fontSize: "1.1rem" }}>DumbScroll Admin</span>
         </div>
+        <button
+          onClick={() => setIsMobileOpen(!isMobileOpen)}
+          aria-label="Toggle Navigation Menu"
+          style={styles.mobileMenuButton}
+        >
+          {isMobileOpen ? "✖" : "☰"}
+        </button>
+      </header>
 
-        <nav style={styles.nav}>
-          {navItems.map((item) => {
-            const isActive = pathname === item.path;
-            return (
-              <Link
-                key={item.path}
-                href={item.path}
-                style={{
-                  ...styles.navItem,
-                  ...(isActive ? styles.navItemActive : {}),
-                }}
-              >
-                <span style={{ fontSize: "1.2rem" }}>{item.icon}</span>
-                <span>{item.label}</span>
-              </Link>
-            );
-          })}
-        </nav>
+      {/* Backdrop Overlay for Mobile */}
+      <div
+        className={`admin-overlay ${isMobileOpen ? "open" : ""}`}
+        onClick={() => setIsMobileOpen(false)}
+      />
+
+      {/* Sidebar */}
+      <aside className={`admin-sidebar ${isMobileOpen ? "open" : ""}`} style={styles.sidebar}>
+        <div>
+          <div style={styles.logoBox}>
+            <div style={{ display: "flex", alignItems: "center", gap: "12px", flex: 1 }}>
+              <span style={styles.logoIcon}>📜</span>
+              <div>
+                <h1 style={styles.logoTitle}>DumbScroll</h1>
+                <span style={styles.logoBadge}>{role} PORTAL</span>
+              </div>
+            </div>
+            {/* Close button for mobile inside sidebar */}
+            <button
+              onClick={() => setIsMobileOpen(false)}
+              style={styles.sidebarCloseButton}
+              aria-label="Close sidebar"
+            >
+              ✖
+            </button>
+          </div>
+
+          <nav style={styles.nav}>
+            {navItems.map((item) => {
+              const isActive = pathname === item.path;
+              return (
+                <Link
+                  key={item.path}
+                  href={item.path}
+                  onClick={() => setIsMobileOpen(false)}
+                  style={{
+                    ...styles.navItem,
+                    ...(isActive ? styles.navItemActive : {}),
+                  }}
+                >
+                  <span style={{ fontSize: "1.2rem" }}>{item.icon}</span>
+                  <span>{item.label}</span>
+                </Link>
+              );
+            })}
+          </nav>
+        </div>
 
         <div style={styles.sidebarFooter}>
           <div style={styles.userProfile}>
@@ -98,7 +138,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
       </aside>
 
       {/* Main Content Area */}
-      <main style={styles.mainContent}>{children}</main>
+      <main className="admin-main-content" style={styles.mainContent}>{children}</main>
     </div>
   );
 }
@@ -245,9 +285,30 @@ const styles: { [key: string]: React.CSSProperties } = {
     cursor: "pointer",
     textAlign: "center",
   },
+  mobileMenuButton: {
+    background: "transparent",
+    border: "1px solid #334155",
+    borderRadius: "6px",
+    color: "#F8FAFC",
+    fontSize: "1.25rem",
+    padding: "6px 12px",
+    cursor: "pointer",
+    display: "flex",
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  sidebarCloseButton: {
+    background: "transparent",
+    border: "none",
+    color: "#94A3B8",
+    fontSize: "1.2rem",
+    cursor: "pointer",
+    padding: "4px 8px",
+  },
   mainContent: {
     flex: 1,
     padding: "36px 40px",
     overflowY: "auto",
   },
 };
+
