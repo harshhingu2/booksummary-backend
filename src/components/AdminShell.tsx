@@ -41,6 +41,10 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
 
   const navItems = [
     { label: "Dashboard", path: "/admin", icon: "📊" },
+    { label: "Cron Control", path: "/admin/crons", icon: "⏰" },
+    { label: "Categories", path: "/admin/categories", icon: "🏷️" },
+    { label: "YouTube Channels", path: "/admin/youtube", icon: "📺" },
+    { label: "Shorts Moderation", path: "/admin/youtube/shorts", icon: "🎬" },
     { label: "Users", path: "/admin/users", icon: "👥" },
     { label: "Cache Revalidation", path: "/admin/cache", icon: "⚡" },
     { label: "Book Summaries", path: "/admin/books", icon: "📚" },

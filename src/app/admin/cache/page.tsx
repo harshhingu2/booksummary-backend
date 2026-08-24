@@ -25,7 +25,7 @@ export default function AdminCachePage() {
   const fetchCacheStats = async () => {
     try {
       setLoading(true);
-      const res = await fetch("/api/admin/cache");
+      const res = await fetch("/api/admin/cache", { cache: "no-store" });
       const data = await res.json();
       if (data.success) {
         setStats(data.stats);

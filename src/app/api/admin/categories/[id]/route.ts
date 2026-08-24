@@ -5,11 +5,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { connectDB } from "@/lib/db";
-import { BookSummary } from "@/models/Book";
+import { Category } from "@/models/Category";
 
 async function verifyAdminAuth() {
   const session = await getServerSession(authOptions);
-  if (!session || (session.user as any)?.role !== "admin") {
+  const role = (session?.user as any)?.role?.toUpperCase();
+  if (!session || (role !== "ADMIN" && role !== "EDITOR")) {
     return false;
   }
   return session;
@@ -29,19 +30,28 @@ export async function PATCH(
     await connectDB();
     const body = await request.json();
 
-    const updatedBook = await BookSummary.findByIdAndUpdate(id, body, {
+    const updateData: any = {};
+    if (body.name) {
+      updateData.name = body.name.trim();
+      updateData.slug = body.name.trim().toLowerCase().replace(/[^a-z0-9]+/g, "-");
+    }
+    if (body.description !== undefined) updateData.description = body.description.trim();
+    if (body.isActive !== undefined) updateData.isActive = body.isActive;
+    if (body.sortOrder !== undefined) updateData.sortOrder = Number(body.sortOrder) || 0;
+
+    const updated = await Category.findByIdAndUpdate(id, updateData, {
       new: true,
       runValidators: true,
     });
 
-    if (!updatedBook) {
-      return NextResponse.json({ success: false, error: "Book summary not found" }, { status: 404 });
+    if (!updated) {
+      return NextResponse.json({ success: false, error: "Category not found" }, { status: 404 });
     }
 
     return NextResponse.json({
       success: true,
-      message: "Book summary updated successfully",
-      book: updatedBook,
+      message: "Category updated successfully",
+      category: updated,
     });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
@@ -61,16 +71,12 @@ export async function DELETE(
     const { id } = await params;
     await connectDB();
 
-    const deletedBook = await BookSummary.findByIdAndDelete(id);
-
-    if (!deletedBook) {
-      return NextResponse.json({ success: false, error: "Book summary not found" }, { status: 404 });
+    const deleted = await Category.findByIdAndDelete(id);
+    if (!deleted) {
+      return NextResponse.json({ success: false, error: "Category not found" }, { status: 404 });
     }
 
-    return NextResponse.json({
-      success: true,
-      message: "Book summary deleted successfully",
-    });
+    return NextResponse.json({ success: true, message: "Category deleted successfully" });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }

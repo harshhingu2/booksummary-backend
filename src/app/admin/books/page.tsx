@@ -23,7 +23,7 @@ export default function AdminBooksPage() {
       const params = new URLSearchParams();
       if (search) params.append("search", search);
 
-      const res = await fetch(`/api/admin/books?${params.toString()}`);
+      const res = await fetch(`/api/admin/books?${params.toString()}`, { cache: "no-store" });
       const data = await res.json();
       if (data.success) {
         setBooks(data.books);

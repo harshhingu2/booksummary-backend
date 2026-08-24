@@ -18,9 +18,9 @@ export default function AdminDashboardPage() {
       try {
         setLoading(true);
         const [usersRes, cacheRes, booksRes] = await Promise.all([
-          fetch("/api/admin/users"),
-          fetch("/api/admin/cache"),
-          fetch("/api/admin/books"),
+          fetch("/api/admin/users", { cache: "no-store" }),
+          fetch("/api/admin/cache", { cache: "no-store" }),
+          fetch("/api/admin/books", { cache: "no-store" }),
         ]);
 
         const usersData = await usersRes.json();

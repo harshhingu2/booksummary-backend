@@ -5,11 +5,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { connectDB } from "@/lib/db";
-import { BookSummary } from "@/models/Book";
+import { YouTubeVideo } from "@/models/YouTubeVideo";
 
 async function verifyAdminAuth() {
   const session = await getServerSession(authOptions);
-  if (!session || (session.user as any)?.role !== "admin") {
+  const role = (session?.user as any)?.role?.toUpperCase();
+  if (!session || (role !== "ADMIN" && role !== "EDITOR")) {
     return false;
   }
   return session;
@@ -29,19 +30,19 @@ export async function PATCH(
     await connectDB();
     const body = await request.json();
 
-    const updatedBook = await BookSummary.findByIdAndUpdate(id, body, {
+    const updated = await YouTubeVideo.findByIdAndUpdate(id, body, {
       new: true,
       runValidators: true,
     });
 
-    if (!updatedBook) {
-      return NextResponse.json({ success: false, error: "Book summary not found" }, { status: 404 });
+    if (!updated) {
+      return NextResponse.json({ success: false, error: "Short video not found" }, { status: 404 });
     }
 
     return NextResponse.json({
       success: true,
-      message: "Book summary updated successfully",
-      book: updatedBook,
+      message: "Short video updated successfully",
+      video: updated,
     });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
@@ -61,16 +62,12 @@ export async function DELETE(
     const { id } = await params;
     await connectDB();
 
-    const deletedBook = await BookSummary.findByIdAndDelete(id);
-
-    if (!deletedBook) {
-      return NextResponse.json({ success: false, error: "Book summary not found" }, { status: 404 });
+    const deleted = await YouTubeVideo.findByIdAndDelete(id);
+    if (!deleted) {
+      return NextResponse.json({ success: false, error: "Short video not found" }, { status: 404 });
     }
 
-    return NextResponse.json({
-      success: true,
-      message: "Book summary deleted successfully",
-    });
+    return NextResponse.json({ success: true, message: "Short video deleted successfully" });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }

@@ -5,11 +5,14 @@ import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { connectDB } from "@/lib/db";
-import { BookSummary } from "@/models/Book";
+import { CronJob } from "@/models/CronJob";
+import { reloadCronSchedules } from "@/lib/cron";
+import cron from "node-cron";
 
 async function verifyAdminAuth() {
   const session = await getServerSession(authOptions);
-  if (!session || (session.user as any)?.role !== "admin") {
+  const role = (session?.user as any)?.role?.toUpperCase();
+  if (!session || (role !== "ADMIN" && role !== "EDITOR")) {
     return false;
   }
   return session;
@@ -29,19 +32,29 @@ export async function PATCH(
     await connectDB();
     const body = await request.json();
 
-    const updatedBook = await BookSummary.findByIdAndUpdate(id, body, {
+    if (body.schedule && !cron.validate(body.schedule.trim())) {
+      return NextResponse.json(
+        { success: false, error: `Invalid cron schedule expression '${body.schedule}'` },
+        { status: 400 }
+      );
+    }
+
+    const updated = await CronJob.findByIdAndUpdate(id, body, {
       new: true,
       runValidators: true,
     });
 
-    if (!updatedBook) {
-      return NextResponse.json({ success: false, error: "Book summary not found" }, { status: 404 });
+    if (!updated) {
+      return NextResponse.json({ success: false, error: "Cron job not found" }, { status: 404 });
     }
+
+    // Reload active schedules in memory
+    await reloadCronSchedules();
 
     return NextResponse.json({
       success: true,
-      message: "Book summary updated successfully",
-      book: updatedBook,
+      message: "Cron job updated successfully",
+      cron: updated,
     });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
@@ -61,16 +74,14 @@ export async function DELETE(
     const { id } = await params;
     await connectDB();
 
-    const deletedBook = await BookSummary.findByIdAndDelete(id);
-
-    if (!deletedBook) {
-      return NextResponse.json({ success: false, error: "Book summary not found" }, { status: 404 });
+    const deleted = await CronJob.findByIdAndDelete(id);
+    if (!deleted) {
+      return NextResponse.json({ success: false, error: "Cron job not found" }, { status: 404 });
     }
 
-    return NextResponse.json({
-      success: true,
-      message: "Book summary deleted successfully",
-    });
+    await reloadCronSchedules();
+
+    return NextResponse.json({ success: true, message: "Cron job deleted successfully" });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
