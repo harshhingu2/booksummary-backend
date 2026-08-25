@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
   try {
     await connectDB();
     const body = await request.json();
-    const { urlOrId, category, status } = body;
+    const { urlOrId, category, status, channelId } = body;
     let { title, channelName } = body;
 
     if (!urlOrId || !category) {
@@ -120,7 +120,7 @@ export async function POST(request: NextRequest) {
 
     const newVideo = await YouTubeVideo.create({
       videoId,
-      channelId: "manual",
+      channelId: channelId || "manual",
       channelName: channelName || "Manual Upload",
       title: title || `Short ${videoId}`,
       thumbnailUrl: `https://i.ytimg.com/vi/${videoId}/hqdefault.jpg`,

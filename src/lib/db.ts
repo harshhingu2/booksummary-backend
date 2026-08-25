@@ -1,7 +1,6 @@
 import mongoose from "mongoose";
 import fs from "fs";
 import bcrypt from "bcryptjs";
-import { initYouTubeCron } from "@/lib/cron";
 
 const globalForDb = globalThis as unknown as {
   mongooseConn?: {
@@ -198,7 +197,6 @@ export async function connectDB() {
 
   if (globalForDb.mongooseConn!.conn) {
     await ensureAdminAndInitialData();
-    initYouTubeCron();
     return globalForDb.mongooseConn!.conn;
   }
 
@@ -220,6 +218,5 @@ export async function connectDB() {
   }
 
   await ensureAdminAndInitialData();
-  initYouTubeCron();
   return globalForDb.mongooseConn!.conn;
 }

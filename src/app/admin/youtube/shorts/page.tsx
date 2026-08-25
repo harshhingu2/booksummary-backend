@@ -14,6 +14,13 @@ interface ShortItem {
   createdAt: string;
 }
 
+interface ChannelOption {
+  _id: string;
+  channelId: string;
+  channelName: string;
+  defaultCategory: string;
+}
+
 export default function AdminShortsModerationPage() {
   const [shorts, setShorts] = useState<ShortItem[]>([]);
   const [categories, setCategories] = useState<string[]>([]);
@@ -34,6 +41,8 @@ export default function AdminShortsModerationPage() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [newUrlOrId, setNewUrlOrId] = useState("");
   const [newTitle, setNewTitle] = useState("");
+  const [existingChannels, setExistingChannels] = useState<ChannelOption[]>([]);
+  const [selectedChannelId, setSelectedChannelId] = useState("");
   const [newChannelName, setNewChannelName] = useState("");
   const [newCategory, setNewCategory] = useState("Science");
   const [newStatus, setNewStatus] = useState<"approved" | "pending">("approved");
@@ -42,13 +51,15 @@ export default function AdminShortsModerationPage() {
   const fetchShortsAndCategories = async () => {
     try {
       setLoading(true);
-      const [shortsRes, catRes] = await Promise.all([
+      const [shortsRes, catRes, chanRes] = await Promise.all([
         fetch(`/api/admin/youtube/shorts?status=${activeTab}`, { cache: "no-store" }),
         fetch("/api/categories", { cache: "no-store" }),
+        fetch("/api/admin/youtube/channels", { cache: "no-store" }),
       ]);
 
       const shortsData = await shortsRes.json();
       const catData = await catRes.json();
+      const chanData = await chanRes.json();
 
       if (shortsData.success) {
         setShorts(shortsData.shorts);
@@ -62,10 +73,28 @@ export default function AdminShortsModerationPage() {
           if (!names.includes(newCategory)) setNewCategory(names[0]);
         }
       }
+      if (chanData.success && chanData.channels) {
+        setExistingChannels(chanData.channels);
+      }
     } catch (err) {
-      console.error("Failed to fetch shorts:", err);
+      console.error("Failed to fetch shorts/categories/channels:", err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleSelectChannel = (chId: string) => {
+    setSelectedChannelId(chId);
+    if (!chId) {
+      setNewChannelName("");
+      return;
+    }
+    const found = existingChannels.find((c) => c.channelId === chId || c._id === chId);
+    if (found) {
+      setNewChannelName(found.channelName);
+      if (found.defaultCategory && categories.includes(found.defaultCategory)) {
+        setNewCategory(found.defaultCategory);
+      }
     }
   };
 
@@ -84,6 +113,7 @@ export default function AdminShortsModerationPage() {
           urlOrId: newUrlOrId,
           title: newTitle || undefined,
           channelName: newChannelName || undefined,
+          channelId: selectedChannelId || undefined,
           category: newCategory,
           status: newStatus,
         }),
@@ -94,6 +124,7 @@ export default function AdminShortsModerationPage() {
         setMessage({ text: data.message, type: "success" });
         setNewUrlOrId("");
         setNewTitle("");
+        setSelectedChannelId("");
         setNewChannelName("");
         setShowAddForm(false);
         fetchShortsAndCategories();
@@ -283,6 +314,21 @@ export default function AdminShortsModerationPage() {
                 onChange={(e) => setNewTitle(e.target.value)}
                 style={styles.formInput}
               />
+            </div>
+            <div style={styles.formGroupHalf}>
+              <label style={styles.formLabel}>Select Channel (From Existing)</label>
+              <select
+                value={selectedChannelId}
+                onChange={(e) => handleSelectChannel(e.target.value)}
+                style={styles.formSelect}
+              >
+                <option value="">-- Auto-Detect / Other Channel --</option>
+                {existingChannels.map((ch) => (
+                  <option key={ch._id} value={ch.channelId}>
+                    {ch.channelName} ({ch.defaultCategory})
+                  </option>
+                ))}
+              </select>
             </div>
             <div style={styles.formGroupHalf}>
               <label style={styles.formLabel}>Channel Name (Optional)</label>

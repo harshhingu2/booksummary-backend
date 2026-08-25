@@ -93,29 +93,22 @@ export async function reloadCronSchedules() {
  * Initializes the cron scheduler manager on server startup.
  */
 export async function initYouTubeCron() {
-  if (globalForCron.isCronManagerInitialized) {
-    return;
+  // Stop & clear any node-cron background tasks if present
+  if (globalForCron.activeCronTasks) {
+    for (const [id, task] of globalForCron.activeCronTasks.entries()) {
+      task.stop();
+    }
+    globalForCron.activeCronTasks.clear();
   }
-  globalForCron.isCronManagerInitialized = true;
 
   try {
     await connectDB();
-
-    // Ensure default YouTube Ingestion Cron Job exists in DB
-    const existingYouTubeJob = await CronJob.findOne({ name: "YouTube Shorts Auto Ingestion" });
-    if (!existingYouTubeJob) {
-      await CronJob.create({
-        name: "YouTube Shorts Auto Ingestion",
-        schedule: "*/15 * * * *",
-        endpoint: "/api/cron/youtube",
-        isActive: true,
-        lastStatus: "never",
-      });
-      console.log("[node-cron] Created default YouTube Shorts Auto Ingestion cron job in DB.");
-    }
-
-    await reloadCronSchedules();
+    // Set auto-ingestion job to inactive since user uses manual external cron
+    await CronJob.updateMany(
+      { name: "YouTube Shorts Auto Ingestion" },
+      { $set: { isActive: false } }
+    );
   } catch (err) {
-    console.error("[node-cron] Failed to initialize cron manager:", err);
+    console.error("[node-cron] Failed to set auto-ingestion cron to inactive:", err);
   }
 }
