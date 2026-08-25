@@ -31,7 +31,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ success: false, error: "No video IDs provided" }, { status: 400 });
     }
 
-    if (!action || !["approve", "reject", "delete", "change_category"].includes(action)) {
+    if (!action || !["approve", "reject", "pending", "delete", "change_category"].includes(action)) {
       return NextResponse.json({ success: false, error: "Invalid action specified" }, { status: 400 });
     }
 
@@ -47,6 +47,12 @@ export async function POST(request: NextRequest) {
       const res = await YouTubeVideo.updateMany(
         { _id: { $in: ids } },
         { $set: { status: "rejected" } }
+      );
+      modifiedCount = res.modifiedCount;
+    } else if (action === "pending") {
+      const res = await YouTubeVideo.updateMany(
+        { _id: { $in: ids } },
+        { $set: { status: "pending" } }
       );
       modifiedCount = res.modifiedCount;
     } else if (action === "delete") {

@@ -30,6 +30,15 @@ export default function AdminShortsModerationPage() {
 
   const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
 
+  // Add Short Form State
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newUrlOrId, setNewUrlOrId] = useState("");
+  const [newTitle, setNewTitle] = useState("");
+  const [newChannelName, setNewChannelName] = useState("");
+  const [newCategory, setNewCategory] = useState("Science");
+  const [newStatus, setNewStatus] = useState<"approved" | "pending">("approved");
+  const [isAdding, setIsAdding] = useState(false);
+
   const fetchShortsAndCategories = async () => {
     try {
       setLoading(true);
@@ -48,12 +57,53 @@ export default function AdminShortsModerationPage() {
       if (catData.success && catData.categories) {
         const names = catData.categories.map((c: any) => c.name);
         setCategories(names);
-        if (names.length > 0) setBulkCategory(names[0]);
+        if (names.length > 0) {
+          setBulkCategory(names[0]);
+          if (!names.includes(newCategory)) setNewCategory(names[0]);
+        }
       }
     } catch (err) {
       console.error("Failed to fetch shorts:", err);
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleAddShort = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newUrlOrId) return;
+
+    try {
+      setIsAdding(true);
+      setMessage(null);
+
+      const res = await fetch("/api/admin/youtube/shorts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          urlOrId: newUrlOrId,
+          title: newTitle || undefined,
+          channelName: newChannelName || undefined,
+          category: newCategory,
+          status: newStatus,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        setMessage({ text: data.message, type: "success" });
+        setNewUrlOrId("");
+        setNewTitle("");
+        setNewChannelName("");
+        setShowAddForm(false);
+        fetchShortsAndCategories();
+      } else {
+        setMessage({ text: data.error || "Failed to add short video", type: "error" });
+      }
+    } catch (err: any) {
+      setMessage({ text: err.message || "Request failed", type: "error" });
+    } finally {
+      setIsAdding(false);
     }
   };
 
@@ -89,7 +139,7 @@ export default function AdminShortsModerationPage() {
 
   // Bulk API Action
   const handleBulkAction = async (
-    action: "approve" | "reject" | "delete" | "change_category",
+    action: "approve" | "reject" | "pending" | "delete" | "change_category",
     targetCategory?: string
   ) => {
     if (selectedIds.length === 0) return;
@@ -101,6 +151,8 @@ export default function AdminShortsModerationPage() {
       confirmMsg = `Are you sure you want to APPROVE ${count} selected short(s)?`;
     } else if (action === "reject") {
       confirmMsg = `Are you sure you want to REJECT ${count} selected short(s)?`;
+    } else if (action === "pending") {
+      confirmMsg = `Are you sure you want to set status to PENDING for ${count} selected short(s)?`;
     } else if (action === "delete") {
       confirmMsg = `Are you sure you want to DELETE ${count} selected short(s)? This action cannot be undone.`;
     } else if (action === "change_category") {
@@ -136,7 +188,7 @@ export default function AdminShortsModerationPage() {
   };
 
   // Single Actions
-  const handleSingleAction = async (id: string, newStatus: "approved" | "rejected") => {
+  const handleSingleAction = async (id: string, newStatus: "approved" | "rejected" | "pending") => {
     try {
       const res = await fetch(`/api/admin/youtube/shorts/${id}`, {
         method: "PATCH",
@@ -187,6 +239,12 @@ export default function AdminShortsModerationPage() {
           <h1 style={styles.title}>Shorts Moderation</h1>
           <p style={styles.subtitle}>Review discovered YouTube Shorts, approve for feed, or reclassify categories</p>
         </div>
+        <button
+          onClick={() => setShowAddForm(!showAddForm)}
+          style={styles.toggleAddButton}
+        >
+          {showAddForm ? "❌ Close Form" : "➕ Add Short Video"}
+        </button>
       </div>
 
       {message && (
@@ -198,6 +256,83 @@ export default function AdminShortsModerationPage() {
         >
           {message.text}
         </div>
+      )}
+
+      {/* Add Short Form */}
+      {showAddForm && (
+        <section style={styles.addFormCard}>
+          <h2 style={styles.addFormTitle}>➕ Add YouTube Short Video</h2>
+          <form onSubmit={handleAddShort} style={styles.addShortForm}>
+            <div style={styles.formGroupFull}>
+              <label style={styles.formLabel}>YouTube Short URL or Video ID *</label>
+              <input
+                type="text"
+                required
+                placeholder="e.g. https://www.youtube.com/shorts/dQw4w9WgXcQ or dQw4w9WgXcQ"
+                value={newUrlOrId}
+                onChange={(e) => setNewUrlOrId(e.target.value)}
+                style={styles.formInput}
+              />
+            </div>
+            <div style={styles.formGroupHalf}>
+              <label style={styles.formLabel}>Title (Optional - Auto-detected if empty)</label>
+              <input
+                type="text"
+                placeholder="Custom Short Title"
+                value={newTitle}
+                onChange={(e) => setNewTitle(e.target.value)}
+                style={styles.formInput}
+              />
+            </div>
+            <div style={styles.formGroupHalf}>
+              <label style={styles.formLabel}>Channel Name (Optional)</label>
+              <input
+                type="text"
+                placeholder="e.g. Veritasium"
+                value={newChannelName}
+                onChange={(e) => setNewChannelName(e.target.value)}
+                style={styles.formInput}
+              />
+            </div>
+            <div style={styles.formGroupHalf}>
+              <label style={styles.formLabel}>Category *</label>
+              <select
+                value={newCategory}
+                onChange={(e) => setNewCategory(e.target.value)}
+                style={styles.formSelect}
+              >
+                {categories.map((cat) => (
+                  <option key={cat} value={cat}>
+                    {cat}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div style={styles.formGroupHalf}>
+              <label style={styles.formLabel}>Initial Status *</label>
+              <select
+                value={newStatus}
+                onChange={(e) => setNewStatus(e.target.value as "approved" | "pending")}
+                style={styles.formSelect}
+              >
+                <option value="approved">Approved (Directly visible in feed)</option>
+                <option value="pending">Pending (Needs review)</option>
+              </select>
+            </div>
+            <div style={{ width: "100%", display: "flex", gap: "10px", marginTop: "10px" }}>
+              <button type="submit" disabled={isAdding} style={styles.submitAddButton}>
+                {isAdding ? "Saving Short..." : "🚀 Add Short Video"}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowAddForm(false)}
+                style={styles.cancelAddButton}
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        </section>
       )}
 
       {/* Tabs */}
@@ -248,6 +383,15 @@ export default function AdminShortsModerationPage() {
           </span>
 
           <div style={styles.bulkActionsGroup}>
+            {activeTab !== "pending" && (
+              <button
+                onClick={() => handleBulkAction("pending")}
+                style={styles.bulkPendingBtn}
+              >
+                ⏳ Mark Pending ({selectedIds.length})
+              </button>
+            )}
+
             {activeTab !== "approved" && (
               <button
                 onClick={() => handleBulkAction("approve")}
@@ -372,6 +516,14 @@ export default function AdminShortsModerationPage() {
                     </div>
 
                     <div style={styles.actionsRow}>
+                      {activeTab !== "pending" && (
+                        <button
+                          onClick={() => handleSingleAction(item._id, "pending")}
+                          style={styles.pendingButton}
+                        >
+                          ⏳ Pending
+                        </button>
+                      )}
                       {activeTab !== "approved" && (
                         <button
                           onClick={() => handleSingleAction(item._id, "approved")}
@@ -408,7 +560,94 @@ export default function AdminShortsModerationPage() {
 
 const styles: { [key: string]: React.CSSProperties } = {
   header: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
     marginBottom: "20px",
+  },
+  toggleAddButton: {
+    backgroundColor: "#3B82F6",
+    color: "#FFFFFF",
+    border: "none",
+    borderRadius: "8px",
+    padding: "10px 18px",
+    fontWeight: 600,
+    fontSize: "0.9rem",
+    cursor: "pointer",
+    boxShadow: "0 4px 14px rgba(59, 130, 246, 0.3)",
+  },
+  addFormCard: {
+    backgroundColor: "#1E293B",
+    borderRadius: "14px",
+    padding: "24px",
+    border: "1px solid #334155",
+    marginBottom: "24px",
+  },
+  addFormTitle: {
+    margin: "0 0 16px 0",
+    fontSize: "1.1rem",
+    fontWeight: 700,
+    color: "#F8FAFC",
+  },
+  addShortForm: {
+    display: "flex",
+    flexWrap: "wrap",
+    gap: "14px",
+  },
+  formGroupFull: {
+    width: "100%",
+    display: "flex",
+    flexDirection: "column",
+    gap: "6px",
+  },
+  formGroupHalf: {
+    flex: "1 1 220px",
+    display: "flex",
+    flexDirection: "column",
+    gap: "6px",
+  },
+  formLabel: {
+    fontSize: "0.8rem",
+    fontWeight: 600,
+    color: "#94A3B8",
+  },
+  formInput: {
+    padding: "10px 14px",
+    backgroundColor: "#0F172A",
+    border: "1px solid #334155",
+    borderRadius: "8px",
+    color: "#F8FAFC",
+    fontSize: "0.9rem",
+    outline: "none",
+  },
+  formSelect: {
+    padding: "10px 14px",
+    backgroundColor: "#0F172A",
+    border: "1px solid #334155",
+    borderRadius: "8px",
+    color: "#F8FAFC",
+    fontSize: "0.9rem",
+    outline: "none",
+  },
+  submitAddButton: {
+    backgroundColor: "#10B981",
+    color: "#FFFFFF",
+    border: "none",
+    borderRadius: "8px",
+    padding: "10px 20px",
+    fontWeight: 600,
+    fontSize: "0.9rem",
+    cursor: "pointer",
+  },
+  cancelAddButton: {
+    backgroundColor: "transparent",
+    color: "#94A3B8",
+    border: "1px solid #334155",
+    borderRadius: "8px",
+    padding: "10px 18px",
+    fontWeight: 600,
+    fontSize: "0.9rem",
+    cursor: "pointer",
   },
   title: {
     margin: 0,
@@ -507,6 +746,16 @@ const styles: { [key: string]: React.CSSProperties } = {
     gap: "10px",
     alignItems: "center",
     flexWrap: "wrap",
+  },
+  bulkPendingBtn: {
+    backgroundColor: "#F59E0B",
+    color: "#FFFFFF",
+    border: "none",
+    borderRadius: "6px",
+    padding: "8px 14px",
+    fontSize: "0.85rem",
+    fontWeight: 600,
+    cursor: "pointer",
   },
   bulkApproveBtn: {
     backgroundColor: "#10B981",
@@ -658,6 +907,17 @@ const styles: { [key: string]: React.CSSProperties } = {
   actionsRow: {
     display: "flex",
     gap: "8px",
+  },
+  pendingButton: {
+    flex: 1,
+    backgroundColor: "#F59E0B",
+    color: "#FFFFFF",
+    border: "none",
+    borderRadius: "6px",
+    padding: "8px",
+    fontSize: "0.8rem",
+    fontWeight: 600,
+    cursor: "pointer",
   },
   approveButton: {
     flex: 1,

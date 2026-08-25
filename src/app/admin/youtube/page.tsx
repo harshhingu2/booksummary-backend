@@ -25,6 +25,16 @@ export default function AdminYouTubeChannelsPage() {
   const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
   const [lastStats, setLastStats] = useState<any>(null);
 
+  // Edit Channel State
+  const [editingChannel, setEditingChannel] = useState<ChannelItem | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editCategory, setEditCategory] = useState("");
+  const [editChannelId, setEditChannelId] = useState("");
+  const [editChannelUrl, setEditChannelUrl] = useState("");
+  const [editFeedUrl, setEditFeedUrl] = useState("");
+  const [editIsActive, setEditIsActive] = useState(true);
+  const [savingEdit, setSavingEdit] = useState(false);
+
   const fetchChannels = async () => {
     try {
       setLoading(true);
@@ -133,6 +143,52 @@ export default function AdminYouTubeChannelsPage() {
       if (data.success) fetchChannels();
     } catch (err) {
       console.error("Failed to update category:", err);
+    }
+  };
+
+  const handleOpenEdit = (ch: ChannelItem) => {
+    setEditingChannel(ch);
+    setEditName(ch.channelName);
+    setEditCategory(ch.defaultCategory);
+    setEditChannelId(ch.channelId);
+    setEditChannelUrl(ch.channelUrl || `https://www.youtube.com/channel/${ch.channelId}`);
+    setEditFeedUrl(ch.feedUrl || `https://www.youtube.com/feeds/videos.xml?channel_id=${ch.channelId}`);
+    setEditIsActive(ch.isActive);
+  };
+
+  const handleSaveEdit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!editingChannel) return;
+
+    try {
+      setSavingEdit(true);
+      setMessage(null);
+
+      const res = await fetch(`/api/admin/youtube/channels/${editingChannel._id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          channelName: editName,
+          defaultCategory: editCategory,
+          channelId: editChannelId,
+          channelUrl: editChannelUrl,
+          feedUrl: editFeedUrl,
+          isActive: editIsActive,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        setMessage({ text: "Channel updated successfully!", type: "success" });
+        setEditingChannel(null);
+        fetchChannels();
+      } else {
+        setMessage({ text: data.error || "Failed to update channel", type: "error" });
+      }
+    } catch (err: any) {
+      setMessage({ text: err.message || "Update failed", type: "error" });
+    } finally {
+      setSavingEdit(false);
     }
   };
 
@@ -284,9 +340,14 @@ export default function AdminYouTubeChannelsPage() {
                     {ch.lastFetchedAt ? new Date(ch.lastFetchedAt).toLocaleTimeString() : "Never"}
                   </td>
                   <td style={styles.td}>
-                    <button onClick={() => handleDeleteChannel(ch._id)} style={styles.deleteButton}>
-                      🗑️ Remove
-                    </button>
+                    <div style={{ display: "flex", gap: "8px" }}>
+                      <button onClick={() => handleOpenEdit(ch)} style={styles.editButton}>
+                        ✏️ Edit
+                      </button>
+                      <button onClick={() => handleDeleteChannel(ch._id)} style={styles.deleteButton}>
+                        🗑️ Remove
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -294,6 +355,101 @@ export default function AdminYouTubeChannelsPage() {
           </table>
         )}
       </section>
+
+      {/* Edit Channel Modal */}
+      {editingChannel && (
+        <div style={styles.modalOverlay}>
+          <div style={styles.modalContent}>
+            <div style={styles.modalHeader}>
+              <h3 style={styles.modalTitle}>✏️ Edit Channel: {editingChannel.channelName}</h3>
+              <button onClick={() => setEditingChannel(null)} style={styles.closeModalBtn}>✕</button>
+            </div>
+            <form onSubmit={handleSaveEdit} style={styles.editForm}>
+              <div style={styles.fieldGroup}>
+                <label style={styles.fieldLabel}>Channel Name *</label>
+                <input
+                  type="text"
+                  required
+                  value={editName}
+                  onChange={(e) => setEditName(e.target.value)}
+                  style={styles.fieldInput}
+                />
+              </div>
+
+              <div style={styles.fieldGroup}>
+                <label style={styles.fieldLabel}>Default Category *</label>
+                <select
+                  value={editCategory}
+                  onChange={(e) => setEditCategory(e.target.value)}
+                  style={styles.fieldSelect}
+                >
+                  {categories.map((cat) => (
+                    <option key={cat} value={cat}>
+                      {cat}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              <div style={styles.fieldGroup}>
+                <label style={styles.fieldLabel}>Channel ID *</label>
+                <input
+                  type="text"
+                  required
+                  value={editChannelId}
+                  onChange={(e) => {
+                    const newId = e.target.value;
+                    setEditChannelId(newId);
+                    setEditFeedUrl(`https://www.youtube.com/feeds/videos.xml?channel_id=${newId}`);
+                  }}
+                  style={styles.fieldInput}
+                />
+              </div>
+
+              <div style={styles.fieldGroup}>
+                <label style={styles.fieldLabel}>Channel Page URL</label>
+                <input
+                  type="text"
+                  value={editChannelUrl}
+                  onChange={(e) => setEditChannelUrl(e.target.value)}
+                  style={styles.fieldInput}
+                />
+              </div>
+
+              <div style={styles.fieldGroup}>
+                <label style={styles.fieldLabel}>XML Feed URL</label>
+                <input
+                  type="text"
+                  value={editFeedUrl}
+                  onChange={(e) => setEditFeedUrl(e.target.value)}
+                  style={styles.fieldInput}
+                />
+              </div>
+
+              <div style={styles.fieldGroup}>
+                <label style={{ display: "flex", alignItems: "center", gap: "8px", cursor: "pointer", color: "#F8FAFC", fontSize: "0.9rem" }}>
+                  <input
+                    type="checkbox"
+                    checked={editIsActive}
+                    onChange={(e) => setEditIsActive(e.target.checked)}
+                    style={{ width: "18px", height: "18px", accentColor: "#3B82F6" }}
+                  />
+                  Active Channel (Automated Ingestion Enabled)
+                </label>
+              </div>
+
+              <div style={styles.modalActions}>
+                <button type="submit" disabled={savingEdit} style={styles.saveEditBtn}>
+                  {savingEdit ? "Saving..." : "💾 Save Changes"}
+                </button>
+                <button type="button" onClick={() => setEditingChannel(null)} style={styles.cancelEditBtn}>
+                  Cancel
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -466,6 +622,16 @@ const styles: { [key: string]: React.CSSProperties } = {
     fontWeight: 700,
     cursor: "pointer",
   },
+  editButton: {
+    backgroundColor: "#3B82F6",
+    color: "#FFFFFF",
+    border: "none",
+    padding: "6px 12px",
+    borderRadius: "6px",
+    fontSize: "0.75rem",
+    fontWeight: 600,
+    cursor: "pointer",
+  },
   deleteButton: {
     backgroundColor: "rgba(239, 68, 68, 0.15)",
     color: "#FCA5A5",
@@ -480,5 +646,106 @@ const styles: { [key: string]: React.CSSProperties } = {
     padding: "40px",
     textAlign: "center",
     color: "#94A3B8",
+  },
+  modalOverlay: {
+    position: "fixed",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(15, 23, 42, 0.8)",
+    backdropFilter: "blur(6px)",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 1000,
+    padding: "20px",
+  },
+  modalContent: {
+    backgroundColor: "#1E293B",
+    border: "1px solid #334155",
+    borderRadius: "16px",
+    width: "100%",
+    maxWidth: "520px",
+    padding: "24px",
+    boxShadow: "0 20px 40px rgba(0,0,0,0.5)",
+  },
+  modalHeader: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    marginBottom: "20px",
+  },
+  modalTitle: {
+    margin: 0,
+    fontSize: "1.2rem",
+    fontWeight: 700,
+    color: "#F8FAFC",
+  },
+  closeModalBtn: {
+    backgroundColor: "transparent",
+    border: "none",
+    color: "#94A3B8",
+    fontSize: "1.2rem",
+    cursor: "pointer",
+  },
+  editForm: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "16px",
+  },
+  fieldGroup: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "6px",
+  },
+  fieldLabel: {
+    fontSize: "0.8rem",
+    fontWeight: 600,
+    color: "#94A3B8",
+  },
+  fieldInput: {
+    padding: "10px 14px",
+    backgroundColor: "#0F172A",
+    border: "1px solid #334155",
+    borderRadius: "8px",
+    color: "#F8FAFC",
+    fontSize: "0.9rem",
+    outline: "none",
+  },
+  fieldSelect: {
+    padding: "10px 14px",
+    backgroundColor: "#0F172A",
+    border: "1px solid #334155",
+    borderRadius: "8px",
+    color: "#F8FAFC",
+    fontSize: "0.9rem",
+    outline: "none",
+  },
+  modalActions: {
+    display: "flex",
+    gap: "12px",
+    marginTop: "8px",
+  },
+  saveEditBtn: {
+    flex: 1,
+    backgroundColor: "#10B981",
+    color: "#FFFFFF",
+    border: "none",
+    borderRadius: "8px",
+    padding: "10px 18px",
+    fontWeight: 600,
+    fontSize: "0.9rem",
+    cursor: "pointer",
+  },
+  cancelEditBtn: {
+    backgroundColor: "transparent",
+    color: "#94A3B8",
+    border: "1px solid #334155",
+    borderRadius: "8px",
+    padding: "10px 18px",
+    fontWeight: 600,
+    fontSize: "0.9rem",
+    cursor: "pointer",
   },
 };
