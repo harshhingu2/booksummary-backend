@@ -48,76 +48,150 @@ export const DUMMY_TOPIC_SUMMARIES = [
       <h2>1. Dual Systems of Mind</h2>
       <p>The human brain operates using two distinct operational modes:</p>
       <ul>
-        <li><strong>System 1 (Fast & Intuitive):</strong> Operates automatically with almost no conscious effort. It handles quick instinctual reactions and pattern recognition.</li>
-        <li><strong>System 2 (Slow & Deliberate):</strong> Allocates deliberate attention to complex mathematical computations, logical analysis, and critical reasoning.</li>
+        <li><strong>System 1 (Fast & Intuitive):</strong> Automatic, unconscious, and rapid thinking. Great for survival, but vulnerable to cognitive errors.</li>
+        <li><strong>System 2 (Slow & Deliberate):</strong> Analytical, conscious, and effortful thinking. Essential for complex calculations and strategic choices.</li>
       </ul>
 
-      <h2>2. Recognizing Cognitive Biases</h2>
-      <p>Our daily decisions are heavily influenced by unconscious shortcuts known as <em>heuristics</em>:</p>
-      <ol>
-        <li><strong>Confirmation Bias:</strong> The tendency to search for and favor information that confirms existing beliefs.</li>
-        <li><strong>Availability Bias:</strong> Overestimating the likelihood of events based on how easily recent memories come to mind.</li>
-      </ol>
-
-      <h2>3. Overcoming Loss Aversion</h2>
-      <p>Psychologically, the pain of losing $100 is twice as intense as the joy of gaining $100. Recognizing loss aversion prevents panic during uncertain circumstances.</p>
+      <h2>2. Mental Biases That Cloud Judgement</h2>
+      <p>Understanding confirmation bias, availability heuristics, and sunk-cost fallacies protects you from irrational decisions.</p>
+      <blockquote>"We are blind to our blindness. We have very little idea of how little we know."</blockquote>
     `
   },
   {
-    title: "Deep Focus & Peak Productivity",
+    title: "High-Performance Habits & Extreme Focus",
     topic: "Productivity",
-    coverImage: "https://images.unsplash.com/photo-1512820790803-83ca734da794?w=600&auto=format&fit=crop&q=80",
-    readingTimeMinutes: 10,
+    coverImage: "https://images.unsplash.com/photo-1499750310107-5fef28a66643?w=600&auto=format&fit=crop&q=80",
+    readingTimeMinutes: 14,
     isTopCombine: true,
-    shortDescription: "Unlocking distraction-free flow states and high-value cognitive output.",
+    shortDescription: "Unleash elite cognitive performance through deep work rituals, atomic habits, and flow states.",
     chapters: [
-      { chapterNumber: 1, title: "The Deep Work Hypothesis" },
-      { chapterNumber: 2, title: "Eliminating Digital Distractions" },
-      { chapterNumber: 3, title: "Building a Daily Routine for Focus" }
+      { chapterNumber: 1, title: "The Myth of Multitasking" },
+      { chapterNumber: 2, title: "Deep Work vs Shallow Work" },
+      { chapterNumber: 3, title: "Designing Your High-Performance Environment" }
+    ],
+    content: `
+      <h2>1. The Myth of Multitasking</h2>
+      <p>Attention residue prevents deep retention and quality output when task switching. True high-leverage mastery requires single-task deep immersion.</p>
+      <h2>2. Deep Work Protocols</h2>
+      <p>Schedule non-negotiable 90-minute uninterrupted creative sprints away from social media and notifications.</p>
+    `
+  }
+];
+
+export const DUMMY_INDIVIDUAL_BOOKS = [
+  {
+    title: "Atomic Habits",
+    author: "James Clear",
+    topic: "Productivity",
+    coverImage: "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=600&auto=format&fit=crop&q=80",
+    readingTimeMinutes: 11,
+    isFeatured: true,
+    shortDescription: "Tiny changes, remarkable results: an operating system for continuous 1% daily improvement.",
+    chapters: [
+      { chapterNumber: 1, title: "The Surprising Power of Atomic Habits" },
+      { chapterNumber: 2, title: "How Your Habits Shape Your Identity" },
+      { chapterNumber: 3, title: "The 4 Laws of Behavior Change" },
+      { chapterNumber: 4, title: "How to Make Good Habits Inevitable" }
+    ],
+    content: `
+      <h2>1. The Compound Effect of 1% Daily Improvements</h2>
+      <p>Habits are the compound interest of self-improvement. Getting 1 percent better each day compounds into a 37-fold improvement across a single year.</p>
+      <blockquote>"You do not rise to the level of your goals. You fall to the level of your systems."</blockquote>
+      
+      <h2>2. Identity-Based Habit Formation</h2>
+      <p>The most effective way to transform your behavior is not to focus on what you want to achieve, but on who you wish to become. True behavior change is identity change.</p>
+      
+      <h2>3. The Four Laws of Behavior Change</h2>
+      <ul>
+        <li><strong>Make it Obvious:</strong> Design your visual cues and environment.</li>
+        <li><strong>Make it Attractive:</strong> Pair habits you need to do with habits you want to do.</li>
+        <li><strong>Make it Easy:</strong> Reduce friction and apply the 2-minute rule.</li>
+        <li><strong>Make it Satisfying:</strong> Provide immediate gratification through tracking.</li>
+      </ul>
+    `
+  },
+  {
+    title: "The Psychology of Money",
+    author: "Morgan Housel",
+    topic: "Money",
+    coverImage: "https://images.unsplash.com/photo-1579621970563-ebec7560ff3e?w=600&auto=format&fit=crop&q=80",
+    readingTimeMinutes: 10,
+    isFeatured: true,
+    shortDescription: "Timeless lessons on wealth, greed, and happiness. Financial success isn't science—it's behavior.",
+    chapters: [
+      { chapterNumber: 1, title: "No One's Crazy" },
+      { chapterNumber: 2, title: "Luck & Risk" },
+      { chapterNumber: 3, title: "Never Enough" },
+      { chapterNumber: 4, title: "Freedom: The Ultimate Dividend" }
+    ],
+    content: `
+      <h2>1. Controlling Your Time</h2>
+      <p>The highest form of wealth is the ability to wake up every morning and say, 'I can do whatever I want today.' Time sovereignty beats material ostentation every single time.</p>
+      <blockquote>"Spending money to show people how much money you have is the fastest way to have less money."</blockquote>
+
+      <h2>2. Wealth is What You Don't See</h2>
+      <p>Wealth is financial options, investments unspent, and equity untouched. Rich is current income; wealth is hidden freedom.</p>
+    `
+  },
+  {
+    title: "Deep Work",
+    author: "Cal Newport",
+    topic: "Productivity",
+    coverImage: "https://images.unsplash.com/photo-1456513080510-7bf3a84b82f8?w=600&auto=format&fit=crop&q=80",
+    readingTimeMinutes: 13,
+    isFeatured: false,
+    shortDescription: "Rules for focused success in a distracted world. The superpower of the knowledge economy.",
+    chapters: [
+      { chapterNumber: 1, title: "Deep Work is Valuable & Rare" },
+      { chapterNumber: 2, title: "Rule #1: Work Deeply" },
+      { chapterNumber: 3, title: "Rule #2: Embrace Boredom" },
+      { chapterNumber: 4, title: "Rule #3: Quit Social Media" }
     ],
     content: `
       <h2>1. The Deep Work Hypothesis</h2>
-      <p>In a modern economy saturated with constant notifications and shallow tasks, the capacity to perform <strong>distraction-free focused work</strong> has become an elite superpower.</p>
+      <p>The ability to perform deep work is becoming increasingly rare at exactly the same time it is becoming increasingly valuable in our digital economy.</p>
+      <blockquote>"If you don't produce, you won't thrive—no matter how skilled or talented you are."</blockquote>
 
-      <h2>2. High-Value Output Formula</h2>
-      <p>Peak performance output can be summarized by the equation:</p>
-      <p><code>High-Quality Work Produced = (Time Spent) x (Intensity of Focus)</code></p>
-
-      <h2>3. Actionable Rules for Deep Focus</h2>
-      <ul>
-        <li><strong>Batch Shallow Tasks:</strong> Schedule fixed 30-minute windows for email and messaging rather than checking continuously.</li>
-        <li><strong>Embrace Boredom:</strong> Train your brain to resist reaching for your smartphone during brief lulls in activity.</li>
-        <li><strong>Shutdown Routine:</strong> Establish a strict end-of-day ritual to disconnect completely and restore mental energy.</li>
-      </ul>
+      <h2>2. Banishing Shallow Distractions</h2>
+      <p>Treat your cognitive attention like a precious finite resource. Cultivate monastic or bimodal blocks of deliberate, interruption-free focus.</p>
     `
   },
   {
-    title: "Building an Unshakeable Growth Mindset",
-    topic: "Mindset",
-    coverImage: "https://images.unsplash.com/photo-1544716278-ca5e3f4abd8c?w=600&auto=format&fit=crop&q=80",
-    readingTimeMinutes: 11,
-    isTopCombine: true,
-    shortDescription: "How identity-driven micro habits transform personal capabilities over time.",
+    title: "Thinking, Fast and Slow",
+    author: "Daniel Kahneman",
+    topic: "Psychology",
+    coverImage: "https://images.unsplash.com/photo-1499244571948-7ccddb3583f1?w=600&auto=format&fit=crop&q=80",
+    readingTimeMinutes: 16,
+    isFeatured: false,
+    shortDescription: "The monumental masterwork dissecting the two systems driving human judgement and error.",
     chapters: [
-      { chapterNumber: 1, title: "The 1% Compound Effect" },
-      { chapterNumber: 2, title: "Identity-Based Habit Formation" },
-      { chapterNumber: 3, title: "The 4 Laws of Lasting Change" }
+      { chapterNumber: 1, title: "Two Systems" },
+      { chapterNumber: 2, title: "Heuristics and Biases" },
+      { chapterNumber: 3, title: "Overconfidence" }
     ],
     content: `
-      <h2>1. The 1% Compound Effect</h2>
-      <p>Improving by just <strong>1% every day</strong> leads to a remarkable 37x improvement over the course of a single year. Small habits do not add up linearly; they compound exponentially.</p>
-
-      <h2>2. Identity First, Outcomes Second</h2>
-      <p>True behavior modification begins with shifting your core self-identity:</p>
-      <blockquote>"The goal is not to read a book; the goal is to become a reader."</blockquote>
-
-      <h2>3. The 4 Laws of Habit Loop</h2>
-      <ol>
-        <li><strong>Make it Obvious:</strong> Design your physical environment so cues for good habits are highly visible.</li>
-        <li><strong>Make it Attractive:</strong> Pair habits you need to do with activities you enjoy.</li>
-        <li><strong>Make it Easy:</strong> Reduce friction so new habits take less than two minutes to initiate.</li>
-        <li><strong>Make it Satisfying:</strong> Use immediate rewards to reinforce positive behavior.</li>
-      </ol>
+      <h2>1. Cognitive Illusions</h2>
+      <p>Just as visual illusions trick our eyes, cognitive illusions mislead our reasoning. Recognizing when System 1 is leading you astray is the core of wisdom.</p>
+      <blockquote>"A reliable way to make people believe in falsehoods is frequent repetition, because familiarity is not easily distinguished from truth."</blockquote>
+    `
+  },
+  {
+    title: "Meditations",
+    author: "Marcus Aurelius",
+    topic: "Philosophy",
+    coverImage: "https://images.unsplash.com/photo-1505664194779-8beaceb93744?w=600&auto=format&fit=crop&q=80",
+    readingTimeMinutes: 9,
+    isFeatured: true,
+    shortDescription: "Private reflections of a Roman Emperor on stoicism, impermanence, and inner peace.",
+    chapters: [
+      { chapterNumber: 1, title: "The Inner Citadel" },
+      { chapterNumber: 2, title: "Control vs External Events" },
+      { chapterNumber: 3, title: "Amor Fati: Love Your Fate" }
+    ],
+    content: `
+      <h2>1. The Dichotomy of Control</h2>
+      <p>You have power over your mind - not outside events. Realize this, and you will find indestructible strength.</p>
+      <blockquote>"The impediment to action advances action. What stands in the way becomes the way."</blockquote>
     `
   }
 ];

@@ -54,6 +54,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
     { label: "Users", path: "/admin/users", icon: "👥" },
     { label: "Cache Revalidation", path: "/admin/cache", icon: "⚡" },
     { label: "Book Summaries", path: "/admin/books", icon: "📚" },
+    { label: "Individual Books", path: "/admin/individualbooks", icon: "📖" },
   ];
 
   return (

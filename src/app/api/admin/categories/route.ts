@@ -27,6 +27,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search") || "";
     const status = searchParams.get("status") || "";
+    const type = searchParams.get("type") || "";
 
     const query: any = {};
     if (search) {
@@ -37,6 +38,7 @@ export async function GET(request: NextRequest) {
     }
     if (status === "active") query.isActive = true;
     if (status === "inactive") query.isActive = false;
+    if (type && type !== "all_types") query.type = type;
 
     const categories = await Category.find(query).sort({ sortOrder: 1, name: 1 });
 
@@ -59,7 +61,7 @@ export async function POST(request: NextRequest) {
   try {
     await connectDB();
     const body = await request.json();
-    const { name, description = "", isActive = true, sortOrder = 0 } = body;
+    const { name, description = "", type = "all", isActive = true, sortOrder = 0 } = body;
 
     if (!name) {
       return NextResponse.json({ success: false, error: "Category name is required" }, { status: 400 });
@@ -76,6 +78,7 @@ export async function POST(request: NextRequest) {
       name: name.trim(),
       slug,
       description: description.trim(),
+      type: ["all", "topcombine", "individual"].includes(type) ? type : "all",
       isActive,
       sortOrder: Number(sortOrder) || 0,
     });
