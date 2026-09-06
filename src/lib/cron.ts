@@ -13,9 +13,29 @@ if (!globalForCron.activeCronTasks) {
 }
 
 /**
+ * Returns the number of currently active in-memory node-cron tasks.
+ */
+export function getActiveCronCount(): number {
+  return globalForCron.activeCronTasks ? globalForCron.activeCronTasks.size : 0;
+}
+
+/**
+ * Returns whether the cron manager has been initialized in memory.
+ */
+export function isCronManagerInitialized(): boolean {
+  return !!globalForCron.isCronManagerInitialized;
+}
+
+/**
  * Executes a cron job target (either internal service or HTTP fetch).
  */
-export async function executeCronJob(job: ICronJob) {
+export async function executeCronJob(jobOrId: ICronJob | string) {
+  await connectDB();
+  const job = typeof jobOrId === "string" ? await CronJob.findById(jobOrId) : jobOrId;
+  if (!job) {
+    return { success: false, error: "Job document not found" };
+  }
+
   job.lastStatus = "running";
   job.lastRunAt = new Date();
   await job.save();
@@ -64,51 +84,56 @@ export async function executeCronJob(job: ICronJob) {
  * Reloads all active cron jobs from MongoDB and schedules node-cron tasks.
  */
 export async function reloadCronSchedules() {
-  await connectDB();
-
-  // Stop & clear existing scheduled tasks
-  for (const [id, task] of globalForCron.activeCronTasks!.entries()) {
-    task.stop();
-  }
-  globalForCron.activeCronTasks!.clear();
-
-  // Load active jobs from DB
-  const jobs = await CronJob.find({ isActive: true });
-
-  for (const job of jobs) {
-    if (cron.validate(job.schedule)) {
-      const task = cron.schedule(job.schedule, async () => {
-        console.log(`[node-cron] Triggering scheduled job '${job.name}' (${job.schedule})...`);
-        await executeCronJob(job);
-      });
-      globalForCron.activeCronTasks!.set(job._id.toString(), task);
-      console.log(`[node-cron] Scheduled '${job.name}' with pattern '${job.schedule}'`);
-    } else {
-      console.error(`[node-cron] Invalid cron expression '${job.schedule}' for job '${job.name}'`);
-    }
-  }
-}
-
-/**
- * Initializes the cron scheduler manager on server startup.
- */
-export async function initYouTubeCron() {
-  // Stop & clear any node-cron background tasks if present
-  if (globalForCron.activeCronTasks) {
-    for (const [id, task] of globalForCron.activeCronTasks.entries()) {
-      task.stop();
-    }
-    globalForCron.activeCronTasks.clear();
-  }
-
   try {
     await connectDB();
-    // Set auto-ingestion job to inactive since user uses manual external cron
-    await CronJob.updateMany(
-      { name: "YouTube Shorts Auto Ingestion" },
-      { $set: { isActive: false } }
-    );
+
+    // Stop & clear existing scheduled tasks
+    if (globalForCron.activeCronTasks) {
+      for (const [id, task] of globalForCron.activeCronTasks.entries()) {
+        try {
+          task.stop();
+        } catch (e) {
+          console.error(`[node-cron] Error stopping task ${id}:`, e);
+        }
+      }
+      globalForCron.activeCronTasks.clear();
+    } else {
+      globalForCron.activeCronTasks = new Map<string, ScheduledTask>();
+    }
+
+    // Load active jobs from DB
+    const jobs = await CronJob.find({ isActive: true });
+    console.log(`[node-cron] Found ${jobs.length} active cron jobs in database to schedule.`);
+
+    for (const job of jobs) {
+      const jobIdStr = job._id.toString();
+      const scheduleExpr = job.schedule.trim();
+
+      if (cron.validate(scheduleExpr)) {
+        const task = cron.schedule(scheduleExpr, async () => {
+          console.log(`[node-cron] Triggering scheduled job '${job.name}' (${scheduleExpr})...`);
+          try {
+            await connectDB();
+            const freshJob = await CronJob.findById(jobIdStr);
+            if (!freshJob || !freshJob.isActive) {
+              console.log(`[node-cron] Job '${job.name}' is inactive or deleted, skipping execution.`);
+              return;
+            }
+            await executeCronJob(freshJob);
+          } catch (err) {
+            console.error(`[node-cron] Error during scheduled execution of '${job.name}':`, err);
+          }
+        });
+
+        globalForCron.activeCronTasks.set(jobIdStr, task);
+        console.log(`[node-cron] Successfully scheduled '${job.name}' with pattern '${scheduleExpr}'`);
+      } else {
+        console.error(`[node-cron] Invalid cron expression '${scheduleExpr}' for job '${job.name}'`);
+      }
+    }
+
+    globalForCron.isCronManagerInitialized = true;
   } catch (err) {
-    console.error("[node-cron] Failed to set auto-ingestion cron to inactive:", err);
+    console.error("[node-cron] Failed to reload cron schedules:", err);
   }
 }

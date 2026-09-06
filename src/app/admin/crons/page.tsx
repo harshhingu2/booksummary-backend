@@ -36,6 +36,9 @@ export function getCronHumanLabel(cronExpr: string): string {
 export default function AdminCronsPage() {
   const [crons, setCrons] = useState<CronItem[]>([]);
   const [loading, setLoading] = useState(true);
+  const [activeTasksCount, setActiveTasksCount] = useState<number>(0);
+  const [cronSecret, setCronSecret] = useState<string>("");
+  const [copiedWebhook, setCopiedWebhook] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
 
   // Modal State
@@ -61,6 +64,12 @@ export default function AdminCronsPage() {
       const data = await res.json();
       if (data.success) {
         setCrons(data.crons);
+        if (typeof data.activeTasksCount === "number") {
+          setActiveTasksCount(data.activeTasksCount);
+        }
+        if (data.cronSecret) {
+          setCronSecret(data.cronSecret);
+        }
       }
     } catch (err) {
       console.error("Failed to load crons:", err);
@@ -220,6 +229,63 @@ export default function AdminCronsPage() {
           {message.text}
         </div>
       )}
+
+      {/* Scheduler Diagnostics Card */}
+      <div style={styles.diagnosticsCard}>
+        <div style={styles.diagRow}>
+          <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+            <span
+              style={{
+                display: "inline-block",
+                width: "12px",
+                height: "12px",
+                borderRadius: "50%",
+                backgroundColor: activeTasksCount > 0 ? "#10B981" : "#F59E0B",
+                boxShadow: activeTasksCount > 0 ? "0 0 10px #10B981" : "0 0 10px #F59E0B",
+              }}
+            />
+            <div>
+              <div style={{ fontWeight: 600, color: "#F8FAFC", fontSize: "0.95rem" }}>
+                In-Memory Node-Cron Engine:{" "}
+                <span style={{ color: activeTasksCount > 0 ? "#34D399" : "#FBBF24" }}>
+                  {activeTasksCount > 0
+                    ? `Running (${activeTasksCount} active scheduled ${activeTasksCount === 1 ? "task" : "tasks"})`
+                    : "Idle (0 tasks scheduled)"}
+                </span>
+              </div>
+              <div style={{ fontSize: "0.8rem", color: "#94A3B8", marginTop: "2px" }}>
+                Auto-initialized via Next.js instrumentation on server startup.
+              </div>
+            </div>
+          </div>
+          <button onClick={fetchCrons} style={styles.refreshButton}>
+            🔄 Refresh Status
+          </button>
+        </div>
+
+        <div style={styles.webhookBox}>
+          <div style={{ fontSize: "0.82rem", color: "#CBD5E1", marginBottom: "6px" }}>
+            🔗 <strong>External / Vercel Cron Trigger Endpoint</strong> (for cron-job.org, VPS crontab, or Vercel cron):
+          </div>
+          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+            <code style={styles.webhookUrl}>
+              {typeof window !== "undefined" ? window.location.origin : ""}/api/cron/youtube?secret=
+              {cronSecret || "dumbscroll_cron_secret_2026_v1"}
+            </code>
+            <button
+              onClick={() => {
+                const url = `${window.location.origin}/api/cron/youtube?secret=${cronSecret || "dumbscroll_cron_secret_2026_v1"}`;
+                navigator.clipboard.writeText(url);
+                setCopiedWebhook(true);
+                setTimeout(() => setCopiedWebhook(false), 2500);
+              }}
+              style={styles.copyButton}
+            >
+              {copiedWebhook ? "✅ Copied!" : "📋 Copy URL"}
+            </button>
+          </div>
+        </div>
+      </div>
 
       {/* Table */}
       <div style={styles.tableContainer}>
@@ -649,5 +715,61 @@ const styles: { [key: string]: React.CSSProperties } = {
     maxHeight: "300px",
     overflowY: "auto",
     fontFamily: "monospace",
+  },
+  diagnosticsCard: {
+    backgroundColor: "#1E293B",
+    borderRadius: "14px",
+    border: "1px solid #334155",
+    padding: "20px",
+    marginBottom: "24px",
+    display: "flex",
+    flexDirection: "column",
+    gap: "16px",
+  },
+  diagRow: {
+    display: "flex",
+    justifyContent: "space-between",
+    alignItems: "center",
+    flexWrap: "wrap",
+    gap: "12px",
+  },
+  refreshButton: {
+    backgroundColor: "#0F172A",
+    color: "#94A3B8",
+    border: "1px solid #334155",
+    borderRadius: "6px",
+    padding: "6px 12px",
+    fontSize: "0.8rem",
+    fontWeight: 600,
+    cursor: "pointer",
+  },
+  webhookBox: {
+    backgroundColor: "#0F172A",
+    borderRadius: "8px",
+    border: "1px solid #1E293B",
+    padding: "12px 14px",
+  },
+  webhookUrl: {
+    flex: 1,
+    padding: "8px 12px",
+    backgroundColor: "#020617",
+    color: "#38BDF8",
+    borderRadius: "6px",
+    border: "1px solid #334155",
+    fontFamily: "monospace",
+    fontSize: "0.8rem",
+    overflowX: "auto",
+    whiteSpace: "nowrap",
+  },
+  copyButton: {
+    backgroundColor: "#3B82F6",
+    color: "#FFFFFF",
+    border: "none",
+    borderRadius: "6px",
+    padding: "8px 14px",
+    fontSize: "0.8rem",
+    fontWeight: 600,
+    cursor: "pointer",
+    whiteSpace: "nowrap",
   },
 };

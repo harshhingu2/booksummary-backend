@@ -6,7 +6,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { connectDB } from "@/lib/db";
 import { CronJob } from "@/models/CronJob";
-import { reloadCronSchedules } from "@/lib/cron";
+import { reloadCronSchedules, getActiveCronCount, isCronManagerInitialized } from "@/lib/cron";
 import cron from "node-cron";
 
 async function verifyAdminAuth() {
@@ -27,7 +27,18 @@ export async function GET() {
   try {
     await connectDB();
     const crons = await CronJob.find().sort({ createdAt: -1 });
-    return NextResponse.json({ success: true, crons, count: crons.length });
+    const activeTasksCount = getActiveCronCount();
+    const isInitialized = isCronManagerInitialized();
+    const cronSecret = process.env.CRON_SECRET || "dumbscroll_cron_secret_2026_v1";
+
+    return NextResponse.json({
+      success: true,
+      crons,
+      count: crons.length,
+      activeTasksCount,
+      isInitialized,
+      cronSecret,
+    });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   }
