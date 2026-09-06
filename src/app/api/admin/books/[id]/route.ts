@@ -9,7 +9,8 @@ import { BookSummary } from "@/models/Book";
 
 async function verifyAdminAuth() {
   const session = await getServerSession(authOptions);
-  if (!session || (session.user as any)?.role !== "admin") {
+  const role = (session?.user as any)?.role?.toUpperCase();
+  if (!session || (role !== "ADMIN" && role !== "EDITOR")) {
     return false;
   }
   return session;

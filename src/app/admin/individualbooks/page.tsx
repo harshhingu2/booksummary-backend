@@ -2,13 +2,22 @@
 
 import React, { useState, useEffect } from "react";
 
+interface Chapter {
+  chapterNumber: number;
+  title: string;
+}
+
 interface IndividualBookItem {
   _id: string;
   title: string;
   author?: string;
   topic: string;
+  coverImage: string;
+  audioUrl?: string;
   readingTimeMinutes: number;
   shortDescription: string;
+  content: string;
+  chapters?: Chapter[];
   isFeatured?: boolean;
   createdAt: string;
 }
@@ -17,6 +26,28 @@ export default function AdminIndividualBooksPage() {
   const [books, setBooks] = useState<IndividualBookItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
+
+  // Modal State for Add & Edit
+  const [showModal, setShowModal] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [saving, setSaving] = useState(false);
+  const [uploadingImage, setUploadingImage] = useState(false);
+  const [uploadingAudio, setUploadingAudio] = useState(false);
+
+  // Form State
+  const [formData, setFormData] = useState({
+    title: "",
+    author: "",
+    topic: "Productivity",
+    coverImage: "",
+    audioUrl: "",
+    readingTimeMinutes: 12,
+    shortDescription: "",
+    content: "",
+    isFeatured: false,
+    chaptersText: "", // Newline-separated list of chapter titles
+  });
 
   const fetchBooks = async () => {
     try {
@@ -40,6 +71,161 @@ export default function AdminIndividualBooksPage() {
     fetchBooks();
   }, [search]);
 
+  const handleOpenAddModal = () => {
+    setEditingId(null);
+    setFormData({
+      title: "",
+      author: "",
+      topic: "Productivity",
+      coverImage: "",
+      audioUrl: "",
+      readingTimeMinutes: 12,
+      shortDescription: "",
+      content: "",
+      isFeatured: false,
+      chaptersText: "",
+    });
+    setShowModal(true);
+  };
+
+  const handleOpenEditModal = (book: IndividualBookItem) => {
+    setEditingId(book._id);
+    const chText = (book.chapters || []).map((c) => c.title).join("\n");
+    setFormData({
+      title: book.title,
+      author: book.author || "",
+      topic: book.topic || "Productivity",
+      coverImage: book.coverImage || "",
+      audioUrl: book.audioUrl || "",
+      readingTimeMinutes: book.readingTimeMinutes || 12,
+      shortDescription: book.shortDescription || "",
+      content: book.content || "",
+      isFeatured: !!book.isFeatured,
+      chaptersText: chText,
+    });
+    setShowModal(true);
+  };
+
+  // Upload Cover Image directly to Cloudflare R2
+  const handleUploadCover = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setUploadingImage(true);
+      setMessage(null);
+
+      const data = new FormData();
+      data.append("file", file);
+      data.append("type", "images");
+
+      const res = await fetch("/api/admin/upload", {
+        method: "POST",
+        body: data,
+      });
+      const result = await res.json();
+
+      if (result.success && result.url) {
+        setFormData((prev) => ({ ...prev, coverImage: result.url }));
+        setMessage({ text: "Cover image uploaded to Cloudflare R2!", type: "success" });
+      } else {
+        setMessage({ text: result.error || "Image upload failed", type: "error" });
+      }
+    } catch (err: any) {
+      setMessage({ text: err.message || "Failed to upload image", type: "error" });
+    } finally {
+      setUploadingImage(false);
+    }
+  };
+
+  // Upload Audiobook / Audio Narration directly to Cloudflare R2
+  const handleUploadAudio = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    try {
+      setUploadingAudio(true);
+      setMessage(null);
+
+      const data = new FormData();
+      data.append("file", file);
+      data.append("type", "audio");
+
+      const res = await fetch("/api/admin/upload", {
+        method: "POST",
+        body: data,
+      });
+      const result = await res.json();
+
+      if (result.success && result.url) {
+        setFormData((prev) => ({ ...prev, audioUrl: result.url }));
+        setMessage({ text: "Audiobook uploaded to Cloudflare R2!", type: "success" });
+      } else {
+        setMessage({ text: result.error || "Audio upload failed", type: "error" });
+      }
+    } catch (err: any) {
+      setMessage({ text: err.message || "Failed to upload audio", type: "error" });
+    } finally {
+      setUploadingAudio(false);
+    }
+  };
+
+  const handleSaveBook = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      setSaving(true);
+      setMessage(null);
+
+      // Parse chapters from newline separated text
+      const chapters: Chapter[] = formData.chaptersText
+        .split("\n")
+        .map((line) => line.trim())
+        .filter(Boolean)
+        .map((title, idx) => ({
+          chapterNumber: idx + 1,
+          title,
+        }));
+
+      const payload = {
+        title: formData.title,
+        author: formData.author,
+        topic: formData.topic,
+        coverImage: formData.coverImage,
+        audioUrl: formData.audioUrl,
+        readingTimeMinutes: Number(formData.readingTimeMinutes) || 10,
+        shortDescription: formData.shortDescription,
+        content: formData.content,
+        chapters,
+        isFeatured: formData.isFeatured,
+      };
+
+      const url = editingId ? `/api/admin/individualbooks/${editingId}` : "/api/admin/individualbooks";
+      const method = editingId ? "PATCH" : "POST";
+
+      const res = await fetch(url, {
+        method,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        setMessage({
+          text: editingId ? "Book updated successfully!" : "Book created successfully!",
+          type: "success",
+        });
+        setShowModal(false);
+        fetchBooks();
+      } else {
+        setMessage({ text: data.error || "Failed to save book", type: "error" });
+      }
+    } catch (err: any) {
+      setMessage({ text: err.message || "Failed to save book", type: "error" });
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const handleToggleFeatured = async (book: IndividualBookItem) => {
     try {
       const res = await fetch(`/api/admin/individualbooks/${book._id}`, {
@@ -56,14 +242,15 @@ export default function AdminIndividualBooksPage() {
     }
   };
 
-  const handleDeleteBook = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this individual book summary?")) return;
+  const handleDeleteBook = async (id: string, title: string) => {
+    if (!confirm(`Are you sure you want to delete '${title}'?`)) return;
     try {
       const res = await fetch(`/api/admin/individualbooks/${id}`, {
         method: "DELETE",
       });
       const data = await res.json();
       if (data.success) {
+        setMessage({ text: "Book deleted successfully", type: "success" });
         fetchBooks();
       }
     } catch (err) {
@@ -76,9 +263,25 @@ export default function AdminIndividualBooksPage() {
       <div style={styles.header}>
         <div>
           <h1 style={styles.title}>Individual Books Library</h1>
-          <p style={styles.subtitle}>Specific book summaries (collection: individualbooks)</p>
+          <p style={styles.subtitle}>
+            Manage specific book summaries, HTML content, chapters, and Cloudflare R2 covers & audiobooks
+          </p>
         </div>
+        <button onClick={handleOpenAddModal} style={styles.primaryBtn}>
+          + Add New Book
+        </button>
       </div>
+
+      {message && (
+        <div
+          style={{
+            ...styles.alert,
+            backgroundColor: message.type === "success" ? "#065F46" : "#991B1B",
+          }}
+        >
+          {message.text}
+        </div>
+      )}
 
       <div style={styles.filterBar}>
         <input
@@ -94,16 +297,16 @@ export default function AdminIndividualBooksPage() {
         {loading ? (
           <p style={{ padding: "24px", color: "#94A3B8" }}>Loading books library...</p>
         ) : books.length === 0 ? (
-          <div style={styles.emptyState}>No individual books found. Use the seed endpoint or add books!</div>
+          <div style={styles.emptyState}>No individual books found. Add one above!</div>
         ) : (
           <table style={styles.table}>
             <thead>
               <tr>
-                <th style={styles.th}>Title & Author</th>
+                <th style={styles.th}>Book Title & Author</th>
                 <th style={styles.th}>Topic</th>
                 <th style={styles.th}>Read Time</th>
+                <th style={styles.th}>Audiobook</th>
                 <th style={styles.th}>Featured</th>
-                <th style={styles.th}>Created</th>
                 <th style={styles.th}>Actions</th>
               </tr>
             </thead>
@@ -111,16 +314,43 @@ export default function AdminIndividualBooksPage() {
               {books.map((book) => (
                 <tr key={book._id} style={styles.tr}>
                   <td style={styles.td}>
-                    <div style={{ fontWeight: 600, color: "#FFFFFF" }}>{book.title}</div>
-                    {book.author && <div style={{ fontSize: "0.8rem", color: "#94A3B8" }}>by {book.author}</div>}
-                    <div style={{ fontSize: "0.75rem", color: "#64748B", marginTop: "4px" }}>
-                      {book.shortDescription.substring(0, 90)}...
+                    <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                      {book.coverImage ? (
+                        <img
+                          src={book.coverImage}
+                          alt={book.title}
+                          style={{ width: "42px", height: "58px", borderRadius: "6px", objectFit: "cover" }}
+                        />
+                      ) : (
+                        <div style={{ width: "42px", height: "58px", borderRadius: "6px", backgroundColor: "#334155" }} />
+                      )}
+                      <div>
+                        <div style={{ fontWeight: 600, color: "#FFFFFF" }}>{book.title}</div>
+                        {book.author && <div style={{ fontSize: "0.8rem", color: "#94A3B8" }}>by {book.author}</div>}
+                        <div style={{ fontSize: "0.75rem", color: "#64748B", marginTop: "2px" }}>
+                          {book.chapters?.length || 0} chapters
+                        </div>
+                      </div>
                     </div>
                   </td>
                   <td style={styles.td}>
                     <span style={styles.badge}>{book.topic}</span>
                   </td>
                   <td style={styles.td}>{book.readingTimeMinutes} mins</td>
+                  <td style={styles.td}>
+                    {book.audioUrl ? (
+                      <a
+                        href={book.audioUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        style={{ color: "#10B981", fontSize: "0.75rem", fontWeight: 600, textDecoration: "none" }}
+                      >
+                        🎧 Has Audio
+                      </a>
+                    ) : (
+                      <span style={{ color: "#64748B", fontSize: "0.75rem" }}>None</span>
+                    )}
+                  </td>
                   <td style={styles.td}>
                     <button
                       onClick={() => handleToggleFeatured(book)}
@@ -133,15 +363,14 @@ export default function AdminIndividualBooksPage() {
                     </button>
                   </td>
                   <td style={styles.td}>
-                    {new Date(book.createdAt).toLocaleDateString()}
-                  </td>
-                  <td style={styles.td}>
-                    <button
-                      onClick={() => handleDeleteBook(book._id)}
-                      style={styles.deleteBtn}
-                    >
-                      Delete
-                    </button>
+                    <div style={{ display: "flex", gap: "8px" }}>
+                      <button onClick={() => handleOpenEditModal(book)} style={styles.editBtn}>
+                        Edit
+                      </button>
+                      <button onClick={() => handleDeleteBook(book._id, book.title)} style={styles.deleteBtn}>
+                        Delete
+                      </button>
+                    </div>
                   </td>
                 </tr>
               ))}
@@ -149,6 +378,185 @@ export default function AdminIndividualBooksPage() {
           </table>
         )}
       </div>
+
+      {/* Add / Edit Modal */}
+      {showModal && (
+        <div style={styles.modalBackdrop}>
+          <div style={styles.modalContent}>
+            <h2 style={styles.modalTitle}>{editingId ? "Edit Individual Book" : "Add New Individual Book"}</h2>
+            <form onSubmit={handleSaveBook} style={styles.form}>
+              <div style={{ display: "flex", gap: "16px" }}>
+                <div style={{ flex: 1 }}>
+                  <label style={styles.label}>Book Title *</label>
+                  <input
+                    type="text"
+                    required
+                    placeholder="e.g. Atomic Habits"
+                    value={formData.title}
+                    onChange={(e) => setFormData({ ...formData, title: e.target.value })}
+                    style={styles.modalInput}
+                  />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={styles.label}>Author</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. James Clear"
+                    value={formData.author}
+                    onChange={(e) => setFormData({ ...formData, author: e.target.value })}
+                    style={styles.modalInput}
+                  />
+                </div>
+              </div>
+
+              <div style={{ display: "flex", gap: "16px" }}>
+                <div style={{ flex: 1 }}>
+                  <label style={styles.label}>Topic / Category</label>
+                  <input
+                    type="text"
+                    placeholder="e.g. Productivity, Mindset, Money, Philosophy"
+                    value={formData.topic}
+                    onChange={(e) => setFormData({ ...formData, topic: e.target.value })}
+                    style={styles.modalInput}
+                  />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={styles.label}>Estimated Read Time (Minutes)</label>
+                  <input
+                    type="number"
+                    value={formData.readingTimeMinutes}
+                    onChange={(e) => setFormData({ ...formData, readingTimeMinutes: parseInt(e.target.value, 10) || 10 })}
+                    style={styles.modalInput}
+                  />
+                </div>
+              </div>
+
+              {/* Cover Image URL + Cloudflare R2 Upload */}
+              <div>
+                <label style={styles.label}>Cover Image (URL or Upload to Cloudflare R2)</label>
+                <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                  <input
+                    type="text"
+                    required
+                    placeholder="https://... or upload file"
+                    value={formData.coverImage}
+                    onChange={(e) => setFormData({ ...formData, coverImage: e.target.value })}
+                    style={{ ...styles.modalInput, flex: 1 }}
+                  />
+                  <label style={styles.uploadFileBtn}>
+                    {uploadingImage ? "Uploading..." : "Upload Cover to R2"}
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleUploadCover}
+                      style={{ display: "none" }}
+                      disabled={uploadingImage}
+                    />
+                  </label>
+                </div>
+                {formData.coverImage && (
+                  <div style={{ marginTop: "8px" }}>
+                    <img
+                      src={formData.coverImage}
+                      alt="Cover Preview"
+                      style={{ width: "60px", height: "85px", borderRadius: "6px", objectFit: "cover" }}
+                    />
+                  </div>
+                )}
+              </div>
+
+              {/* Audiobook Audio URL + Cloudflare R2 Upload */}
+              <div>
+                <label style={styles.label}>Audiobook / Audio Narration (URL or Upload to Cloudflare R2)</label>
+                <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+                  <input
+                    type="text"
+                    placeholder="https://...mp3 (or upload audio below)"
+                    value={formData.audioUrl}
+                    onChange={(e) => setFormData({ ...formData, audioUrl: e.target.value })}
+                    style={{ ...styles.modalInput, flex: 1 }}
+                  />
+                  <label style={styles.uploadFileBtn}>
+                    {uploadingAudio ? "Uploading..." : "Upload Audio to R2"}
+                    <input
+                      type="file"
+                      accept="audio/*"
+                      onChange={handleUploadAudio}
+                      style={{ display: "none" }}
+                      disabled={uploadingAudio}
+                    />
+                  </label>
+                </div>
+                {formData.audioUrl && (
+                  <div style={{ marginTop: "8px" }}>
+                    <audio controls src={formData.audioUrl} style={{ width: "100%", height: "36px" }} />
+                  </div>
+                )}
+              </div>
+
+              {/* Short Description */}
+              <div>
+                <label style={styles.label}>Short Hook Description *</label>
+                <textarea
+                  required
+                  rows={2}
+                  placeholder="One or two compelling sentences distilling the core idea..."
+                  value={formData.shortDescription}
+                  onChange={(e) => setFormData({ ...formData, shortDescription: e.target.value })}
+                  style={styles.modalTextarea}
+                />
+              </div>
+
+              {/* Chapters List */}
+              <div>
+                <label style={styles.label}>Chapters / Modules (One chapter title per line)</label>
+                <textarea
+                  rows={3}
+                  placeholder="1. The Surprising Power of Atomic Habits&#10;2. How Habits Shape Identity&#10;3. The 4 Laws of Behavior Change"
+                  value={formData.chaptersText}
+                  onChange={(e) => setFormData({ ...formData, chaptersText: e.target.value })}
+                  style={styles.modalTextarea}
+                />
+              </div>
+
+              {/* Rich Content (HTML or formatted text) */}
+              <div>
+                <label style={styles.label}>Book Summary Content (HTML formatted)</label>
+                <textarea
+                  required
+                  rows={8}
+                  placeholder="<h2>1. Core Principle</h2><p>Summary paragraph...</p><blockquote>Quote</blockquote>"
+                  value={formData.content}
+                  onChange={(e) => setFormData({ ...formData, content: e.target.value })}
+                  style={{ ...styles.modalTextarea, fontFamily: "monospace", fontSize: "0.85rem" }}
+                />
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <input
+                  type="checkbox"
+                  id="isFeatured"
+                  checked={formData.isFeatured}
+                  onChange={(e) => setFormData({ ...formData, isFeatured: e.target.checked })}
+                  style={{ width: "18px", height: "18px", cursor: "pointer" }}
+                />
+                <label htmlFor="isFeatured" style={{ color: "#F8FAFC", fontSize: "0.9rem", cursor: "pointer" }}>
+                  Feature this book in Hero / Spotlight showcase
+                </label>
+              </div>
+
+              <div style={styles.modalActions}>
+                <button type="button" onClick={() => setShowModal(false)} style={styles.cancelBtn} disabled={saving}>
+                  Cancel
+                </button>
+                <button type="submit" style={styles.primaryBtn} disabled={saving || uploadingImage || uploadingAudio}>
+                  {saving ? "Saving Book..." : editingId ? "Update Book" : "Create Book"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -229,6 +637,25 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 600,
     cursor: "pointer",
   },
+  primaryBtn: {
+    padding: "10px 18px",
+    backgroundColor: "#3B82F6",
+    color: "#FFFFFF",
+    border: "none",
+    borderRadius: "8px",
+    fontWeight: 600,
+    fontSize: "0.9rem",
+    cursor: "pointer",
+  },
+  editBtn: {
+    padding: "6px 12px",
+    backgroundColor: "#334155",
+    color: "#FFFFFF",
+    border: "none",
+    borderRadius: "6px",
+    cursor: "pointer",
+    fontSize: "0.75rem",
+  },
   deleteBtn: {
     padding: "6px 12px",
     borderRadius: "6px",
@@ -243,5 +670,101 @@ const styles: Record<string, React.CSSProperties> = {
     padding: "40px",
     textAlign: "center",
     color: "#94A3B8",
+  },
+  alert: {
+    padding: "12px 16px",
+    borderRadius: "8px",
+    color: "#FFFFFF",
+    marginBottom: "16px",
+    fontSize: "0.9rem",
+  },
+  modalBackdrop: {
+    position: "fixed",
+    top: 0,
+    left: 0,
+    right: 0,
+    bottom: 0,
+    backgroundColor: "rgba(0, 0, 0, 0.75)",
+    display: "flex",
+    justifyContent: "center",
+    alignItems: "center",
+    zIndex: 100,
+    padding: "20px",
+  },
+  modalContent: {
+    backgroundColor: "#1E293B",
+    padding: "26px",
+    borderRadius: "14px",
+    width: "100%",
+    maxWidth: "750px",
+    maxHeight: "90vh",
+    overflowY: "auto",
+    border: "1px solid #334155",
+  },
+  modalTitle: {
+    fontSize: "1.35rem",
+    fontWeight: 700,
+    color: "#FFFFFF",
+    margin: "0 0 18px 0",
+  },
+  form: {
+    display: "flex",
+    flexDirection: "column",
+    gap: "16px",
+  },
+  label: {
+    display: "block",
+    fontSize: "0.82rem",
+    color: "#94A3B8",
+    marginBottom: "6px",
+    fontWeight: 600,
+  },
+  modalInput: {
+    width: "100%",
+    padding: "10px 14px",
+    backgroundColor: "#0F172A",
+    border: "1px solid #334155",
+    borderRadius: "8px",
+    color: "#FFFFFF",
+    outline: "none",
+    fontSize: "0.9rem",
+    boxSizing: "border-box",
+  },
+  modalTextarea: {
+    width: "100%",
+    padding: "10px 14px",
+    backgroundColor: "#0F172A",
+    border: "1px solid #334155",
+    borderRadius: "8px",
+    color: "#FFFFFF",
+    outline: "none",
+    fontSize: "0.9rem",
+    boxSizing: "border-box",
+    resize: "vertical",
+  },
+  uploadFileBtn: {
+    display: "inline-block",
+    padding: "10px 14px",
+    backgroundColor: "#0284C7",
+    color: "#FFFFFF",
+    borderRadius: "8px",
+    fontWeight: 600,
+    fontSize: "0.85rem",
+    cursor: "pointer",
+    whiteSpace: "nowrap",
+  },
+  modalActions: {
+    display: "flex",
+    justifyContent: "flex-end",
+    gap: "12px",
+    marginTop: "12px",
+  },
+  cancelBtn: {
+    padding: "10px 16px",
+    backgroundColor: "transparent",
+    color: "#94A3B8",
+    border: "1px solid #334155",
+    borderRadius: "8px",
+    cursor: "pointer",
   },
 };

@@ -10,6 +10,7 @@ export interface IIndividualBook extends Document {
   author?: string;
   topic: string;
   coverImage: string;
+  audioUrl?: string; // Audiobook or audio narration URL in Cloudflare R2
   readingTimeMinutes: number;
   shortDescription: string;
   content: string;
@@ -30,6 +31,7 @@ const IndividualBookSchema = new Schema<IIndividualBook>(
     author: { type: String, default: "" },
     topic: { type: String, required: true, index: true },
     coverImage: { type: String, required: true },
+    audioUrl: { type: String, default: "" },
     readingTimeMinutes: { type: Number, default: 12 },
     shortDescription: { type: String, required: true },
     content: { type: String, required: true },

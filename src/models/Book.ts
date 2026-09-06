@@ -9,6 +9,7 @@ export interface IBookSummary extends Document {
   title: string;
   topic: string;
   coverImage: string;
+  audioUrl?: string; // Audiobook or audio narration URL in Cloudflare R2
   readingTimeMinutes: number;
   shortDescription: string;
   content: string; // HTML formatted content
@@ -28,6 +29,7 @@ const BookSummarySchema = new Schema<IBookSummary>(
     title: { type: String, required: true, index: true },
     topic: { type: String, required: true, index: true }, // e.g., Money, Psychology, Productivity
     coverImage: { type: String, required: true },
+    audioUrl: { type: String, default: "" },
     readingTimeMinutes: { type: Number, default: 10 },
     shortDescription: { type: String, required: true },
     content: { type: String, required: true }, // Rich HTML content
