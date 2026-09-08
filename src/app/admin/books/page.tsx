@@ -14,7 +14,7 @@ interface BookItem {
   coverImage: string;
   audioUrl?: string;
   readingTimeMinutes: number;
-  shortDescription: string;
+  shortDescription?: string;
   content: string;
   chapters?: Chapter[];
   isTopCombine: boolean;
@@ -41,10 +41,8 @@ export default function AdminBooksPage() {
     coverImage: "",
     audioUrl: "",
     readingTimeMinutes: 10,
-    shortDescription: "",
     content: "",
     isTopCombine: true,
-    chaptersText: "",
   });
 
   const fetchBooks = async () => {
@@ -77,27 +75,22 @@ export default function AdminBooksPage() {
       coverImage: "",
       audioUrl: "",
       readingTimeMinutes: 10,
-      shortDescription: "",
       content: "",
-      isTopCombine: true,
-      chaptersText: "",
+    isTopCombine: true,
     });
     setShowModal(true);
   };
 
   const handleOpenEditModal = (b: BookItem) => {
     setEditingId(b._id);
-    const chText = (b.chapters || []).map((c) => c.title).join("\n");
-    setFormData({
+        setFormData({
       title: b.title,
       topic: b.topic || "Productivity",
       coverImage: b.coverImage || "",
       audioUrl: b.audioUrl || "",
       readingTimeMinutes: b.readingTimeMinutes || 10,
-      shortDescription: b.shortDescription || "",
       content: b.content || "",
       isTopCombine: !!b.isTopCombine,
-      chaptersText: chText,
     });
     setShowModal(true);
   };
@@ -172,24 +165,13 @@ export default function AdminBooksPage() {
       setSaving(true);
       setMessage(null);
 
-      const chapters: Chapter[] = formData.chaptersText
-        .split("\n")
-        .map((line) => line.trim())
-        .filter(Boolean)
-        .map((title, idx) => ({
-          chapterNumber: idx + 1,
-          title,
-        }));
-
       const payload = {
         title: formData.title,
         topic: formData.topic,
         coverImage: formData.coverImage,
         audioUrl: formData.audioUrl,
         readingTimeMinutes: Number(formData.readingTimeMinutes) || 10,
-        shortDescription: formData.shortDescription,
         content: formData.content,
-        chapters,
         isTopCombine: formData.isTopCombine,
       };
 
@@ -320,9 +302,7 @@ export default function AdminBooksPage() {
                       )}
                       <div>
                         <div style={{ fontWeight: 600, color: "#F8FAFC" }}>{b.title}</div>
-                        <div style={{ fontSize: "0.75rem", color: "#94A3B8" }}>
-                          {b.chapters?.length || 0} chapters
-                        </div>
+                        
                       </div>
                     </div>
                   </td>
@@ -473,31 +453,6 @@ export default function AdminBooksPage() {
                     <audio controls src={formData.audioUrl} style={{ width: "100%", height: "36px" }} />
                   </div>
                 )}
-              </div>
-
-              {/* Short Description */}
-              <div>
-                <label style={styles.label}>Short Hook Description *</label>
-                <textarea
-                  required
-                  rows={2}
-                  placeholder="One or two sentences summarizing this topic distillation..."
-                  value={formData.shortDescription}
-                  onChange={(e) => setFormData({ ...formData, shortDescription: e.target.value })}
-                  style={styles.modalTextarea}
-                />
-              </div>
-
-              {/* Chapters List */}
-              <div>
-                <label style={styles.label}>Chapters / Modules (One chapter title per line)</label>
-                <textarea
-                  rows={3}
-                  placeholder="1. Mindset & Behavioral Finance&#10;2. Assets vs Liabilities&#10;3. The Compounding Machine"
-                  value={formData.chaptersText}
-                  onChange={(e) => setFormData({ ...formData, chaptersText: e.target.value })}
-                  style={styles.modalTextarea}
-                />
               </div>
 
               {/* Rich Content (HTML or formatted text) */}

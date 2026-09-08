@@ -11,9 +11,9 @@ export interface IBookSummary extends Document {
   coverImage: string;
   audioUrl?: string; // Audiobook or audio narration URL in Cloudflare R2
   readingTimeMinutes: number;
-  shortDescription: string;
+  shortDescription?: string;
   content: string; // HTML formatted content
-  chapters: IChapter[];
+  chapters?: IChapter[];
   isTopCombine: boolean;
   createdAt: Date;
   updatedAt: Date;
@@ -31,9 +31,9 @@ const BookSummarySchema = new Schema<IBookSummary>(
     coverImage: { type: String, required: true },
     audioUrl: { type: String, default: "" },
     readingTimeMinutes: { type: Number, default: 10 },
-    shortDescription: { type: String, required: true },
+    shortDescription: { type: String, default: "" },
     content: { type: String, required: true }, // Rich HTML content
-    chapters: [ChapterSchema],
+    chapters: { type: [ChapterSchema], default: [] },
     isTopCombine: { type: Boolean, default: true, index: true },
   },
   {

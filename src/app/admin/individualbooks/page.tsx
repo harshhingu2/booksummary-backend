@@ -15,7 +15,7 @@ interface IndividualBookItem {
   coverImage: string;
   audioUrl?: string;
   readingTimeMinutes: number;
-  shortDescription: string;
+  shortDescription?: string;
   content: string;
   chapters?: Chapter[];
   isFeatured?: boolean;
@@ -43,10 +43,8 @@ export default function AdminIndividualBooksPage() {
     coverImage: "",
     audioUrl: "",
     readingTimeMinutes: 12,
-    shortDescription: "",
     content: "",
-    isFeatured: false,
-    chaptersText: "", // Newline-separated list of chapter titles
+    isFeatured: false, // Newline-separated list of chapter titles
   });
 
   const fetchBooks = async () => {
@@ -80,28 +78,23 @@ export default function AdminIndividualBooksPage() {
       coverImage: "",
       audioUrl: "",
       readingTimeMinutes: 12,
-      shortDescription: "",
       content: "",
-      isFeatured: false,
-      chaptersText: "",
+    isFeatured: false,
     });
     setShowModal(true);
   };
 
   const handleOpenEditModal = (book: IndividualBookItem) => {
     setEditingId(book._id);
-    const chText = (book.chapters || []).map((c) => c.title).join("\n");
-    setFormData({
+        setFormData({
       title: book.title,
       author: book.author || "",
       topic: book.topic || "Productivity",
       coverImage: book.coverImage || "",
       audioUrl: book.audioUrl || "",
       readingTimeMinutes: book.readingTimeMinutes || 12,
-      shortDescription: book.shortDescription || "",
       content: book.content || "",
       isFeatured: !!book.isFeatured,
-      chaptersText: chText,
     });
     setShowModal(true);
   };
@@ -176,16 +169,6 @@ export default function AdminIndividualBooksPage() {
       setSaving(true);
       setMessage(null);
 
-      // Parse chapters from newline separated text
-      const chapters: Chapter[] = formData.chaptersText
-        .split("\n")
-        .map((line) => line.trim())
-        .filter(Boolean)
-        .map((title, idx) => ({
-          chapterNumber: idx + 1,
-          title,
-        }));
-
       const payload = {
         title: formData.title,
         author: formData.author,
@@ -193,9 +176,7 @@ export default function AdminIndividualBooksPage() {
         coverImage: formData.coverImage,
         audioUrl: formData.audioUrl,
         readingTimeMinutes: Number(formData.readingTimeMinutes) || 10,
-        shortDescription: formData.shortDescription,
         content: formData.content,
-        chapters,
         isFeatured: formData.isFeatured,
       };
 
@@ -327,9 +308,7 @@ export default function AdminIndividualBooksPage() {
                       <div>
                         <div style={{ fontWeight: 600, color: "#FFFFFF" }}>{book.title}</div>
                         {book.author && <div style={{ fontSize: "0.8rem", color: "#94A3B8" }}>by {book.author}</div>}
-                        <div style={{ fontSize: "0.75rem", color: "#64748B", marginTop: "2px" }}>
-                          {book.chapters?.length || 0} chapters
-                        </div>
+                        
                       </div>
                     </div>
                   </td>
@@ -492,31 +471,6 @@ export default function AdminIndividualBooksPage() {
                     <audio controls src={formData.audioUrl} style={{ width: "100%", height: "36px" }} />
                   </div>
                 )}
-              </div>
-
-              {/* Short Description */}
-              <div>
-                <label style={styles.label}>Short Hook Description *</label>
-                <textarea
-                  required
-                  rows={2}
-                  placeholder="One or two compelling sentences distilling the core idea..."
-                  value={formData.shortDescription}
-                  onChange={(e) => setFormData({ ...formData, shortDescription: e.target.value })}
-                  style={styles.modalTextarea}
-                />
-              </div>
-
-              {/* Chapters List */}
-              <div>
-                <label style={styles.label}>Chapters / Modules (One chapter title per line)</label>
-                <textarea
-                  rows={3}
-                  placeholder="1. The Surprising Power of Atomic Habits&#10;2. How Habits Shape Identity&#10;3. The 4 Laws of Behavior Change"
-                  value={formData.chaptersText}
-                  onChange={(e) => setFormData({ ...formData, chaptersText: e.target.value })}
-                  style={styles.modalTextarea}
-                />
               </div>
 
               {/* Rich Content (HTML or formatted text) */}
