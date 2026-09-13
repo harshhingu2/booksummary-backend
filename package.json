@@ -9,7 +9,9 @@
     "lint": "eslint",
     "db:seed": "node scripts/seed.mjs",
     "seed:admin": "node scripts/seedAdmin.mjs",
-    "cron": "node scripts/cronRunner.mjs"
+    "cron": "node scripts/cronRunner.mjs",
+    "scrape:chatgpt": "node scripts/chatgptScraper.mjs",
+    "scrape:deepseek": "node scripts/deepseekScraper.mjs"
   },
   "dependencies": {
     "@aws-sdk/client-s3": "^3.1127.0",

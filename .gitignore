@@ -39,3 +39,7 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# scraper browser profiles
+.chatgpt_profile
+.deepseek_profile

@@ -1,6 +1,13 @@
 import mongoose from "mongoose";
 import fs from "fs";
 import bcrypt from "bcryptjs";
+import dns from "dns";
+
+// Ensure Node.js can resolve MongoDB Atlas SRV records on Windows networks
+try {
+  dns.setServers(["8.8.8.8", "1.1.1.1"]);
+} catch (e) {}
+
 
 const globalForDb = globalThis as unknown as {
   mongooseConn?: {

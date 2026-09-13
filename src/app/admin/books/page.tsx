@@ -202,6 +202,46 @@ export default function AdminBooksPage() {
     }
   };
 
+  const [aiProvider, setAiProvider] = useState<"chatgpt" | "deepseek">("chatgpt");
+  const [generatingId, setGeneratingId] = useState<string | null>(null);
+
+  const handleGenerateContent = async (book: BookItem) => {
+    const providerLabel = aiProvider === "deepseek" ? "DeepSeek" : "ChatGPT";
+    const confirmGen = confirm(
+      `Generate full AI summary content for "${book.title}" using ${providerLabel}?\n\nThis will run the ${providerLabel} scraper headless, generate high-impact formatted HTML, and save directly to this summary's content field in the database.`
+    );
+    if (!confirmGen) return;
+
+    try {
+      setGeneratingId(book._id);
+      setMessage({ text: `Generating AI content with ${providerLabel} for "${book.title}"... Please wait.`, type: "success" });
+
+      const res = await fetch("/api/admin/generate-content", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id: book._id,
+          type: "topcombine",
+          title: book.title,
+          topic: book.topic || "Productivity",
+          provider: aiProvider,
+        }),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        setMessage({ text: `AI content generated via ${providerLabel} and saved to DB for "${book.title}"!`, type: "success" });
+        fetchBooks();
+      } else {
+        setMessage({ text: data.error || "Failed to generate AI content", type: "error" });
+      }
+    } catch (err: any) {
+      setMessage({ text: err.message || "Failed to generate AI content", type: "error" });
+    } finally {
+      setGeneratingId(null);
+    }
+  };
+
   const handleToggleTopCombine = async (book: BookItem) => {
     try {
       const res = await fetch(`/api/admin/books/${book._id}`, {
@@ -267,6 +307,29 @@ export default function AdminBooksPage() {
           onChange={(e) => setSearch(e.target.value)}
           style={styles.searchInput}
         />
+        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+          <label style={{ color: "#94A3B8", fontSize: "0.85rem", fontWeight: 600, whiteSpace: "nowrap" }}>
+            AI Scraper:
+          </label>
+          <select
+            value={aiProvider}
+            onChange={(e) => setAiProvider(e.target.value as "chatgpt" | "deepseek")}
+            style={{
+              padding: "8px 12px",
+              backgroundColor: "#1E293B",
+              border: "1px solid #334155",
+              borderRadius: "6px",
+              color: "#F8FAFC",
+              fontSize: "0.85rem",
+              fontWeight: 600,
+              cursor: "pointer",
+              outline: "none",
+            }}
+          >
+            <option value="chatgpt">🤖 ChatGPT (chatgpt.com)</option>
+            <option value="deepseek">🐋 DeepSeek (chat.deepseek.com)</option>
+          </select>
+        </div>
       </div>
 
       <div style={styles.tableContainer}>
@@ -336,7 +399,19 @@ export default function AdminBooksPage() {
                     </button>
                   </td>
                   <td style={styles.td}>
-                    <div style={{ display: "flex", gap: "8px" }}>
+                    <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                      <button
+                        onClick={() => handleGenerateContent(b)}
+                        disabled={generatingId === b._id}
+                        style={{
+                          ...styles.aiBtn,
+                          opacity: generatingId === b._id ? 0.6 : 1,
+                          cursor: generatingId === b._id ? "wait" : "pointer",
+                        }}
+                        title={`Generate summary content using ${aiProvider === "deepseek" ? "DeepSeek" : "ChatGPT"} scraper and save to DB`}
+                      >
+                        {generatingId === b._id ? "⚡ Generating..." : "⚡ AI Content"}
+                      </button>
                       <button onClick={() => handleOpenEditModal(b)} style={styles.editBtn}>
                         Edit
                       </button>
@@ -587,6 +662,20 @@ const styles: Record<string, React.CSSProperties> = {
     fontWeight: 600,
     fontSize: "0.9rem",
     cursor: "pointer",
+  },
+  aiBtn: {
+    padding: "6px 12px",
+    backgroundColor: "#6366F1",
+    color: "#FFFFFF",
+    border: "none",
+    borderRadius: "6px",
+    cursor: "pointer",
+    fontSize: "0.75rem",
+    fontWeight: 600,
+    display: "flex",
+    alignItems: "center",
+    gap: "4px",
+    whiteSpace: "nowrap" as const,
   },
   editBtn: {
     padding: "6px 12px",
