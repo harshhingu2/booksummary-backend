@@ -183,6 +183,14 @@ async function ensureAdminAndInitialData() {
       }
     }
 
+    // 4. Ensure Default AI Prompts Exist
+    try {
+      const { ensureDefaultPrompts } = await import("./promptSeed");
+      await ensureDefaultPrompts();
+    } catch (promptErr) {
+      console.error("[Auto-Init] Failed to ensure default prompts:", promptErr);
+    }
+
     globalForDb.adminEnsured = true;
   } catch (err) {
     console.error("[Auto-Init] Failed to ensure initial data:", err);

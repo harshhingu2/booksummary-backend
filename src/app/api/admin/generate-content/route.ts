@@ -41,11 +41,33 @@ export async function POST(request: NextRequest) {
 
     const selectedProvider = provider.toLowerCase() === "deepseek" ? "deepseek" : "chatgpt";
 
-    // Construct the structured prompt
-    const prompt =
-      customPrompt && customPrompt.trim()
-        ? customPrompt.trim()
-        : `Write a comprehensive, engaging, and high-impact book summary for:
+    // Dynamically retrieve active prompt template from database if no customPrompt provided
+    let prompt = customPrompt && customPrompt.trim() ? customPrompt.trim() : "";
+    if (!prompt) {
+      try {
+        const { Prompt } = await import("@/models/Prompt");
+        const promptType = type === "individual" ? "individual" : "multibook";
+        const defaultPromptDoc = await Prompt.findOne({ type: promptType, isActive: true, isDefault: true })
+          || await Prompt.findOne({ type: promptType, isActive: true }).sort({ updatedAt: -1 });
+
+        if (defaultPromptDoc && defaultPromptDoc.content) {
+          prompt = defaultPromptDoc.content
+            .replace(/\{\{topic\}\}/g, topic || "General")
+            .replace(/\{\{title\}\}/g, title || "")
+            .replace(/\{\{books\}\}/g, title || "")
+            .replace(/\{\{author\}\}/g, author || "")
+            .replace(/\{\{contentType\}\}/g, type === "individual" ? "Single Book Summary" : "Multi-Book Synthesis")
+            .replace(/\{\{audience\}\}/g, "US/Western adults")
+            .replace(/\{\{targetLength\}\}/g, type === "individual" ? "~1,500 words" : "~2,000 words")
+            .replace(/\{\{goal\}\}/g, `Help the reader fundamentally understand the core ideas and applications.`);
+        }
+      } catch (promptErr) {
+        console.warn("[AI Generation] Could not fetch default prompt from DB, using fallback:", promptErr);
+      }
+    }
+
+    if (!prompt) {
+      prompt = `Write a comprehensive, engaging, and high-impact book summary for:
 Title: "${title}"
 ${author ? `Author: "${author}"` : ""}
 Topic/Category: "${topic || "General"}"
@@ -55,6 +77,7 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
 2. 3 to 5 Key Chapters / Principles (each marked with <h2> and an insightful title, followed by deep actionable explanations)
 3. Memorable Quotes (wrapped in <blockquote>)
 4. Actionable Real-World Applications (structured as bullet points with <ul> and <li>)`;
+    }
 
     console.log(`[AI Generation] Triggering ${selectedProvider.toUpperCase()} scraper for: "${title}" (${type})...`);
 
