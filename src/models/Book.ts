@@ -15,6 +15,7 @@ export interface IBookSummary extends Document {
   content: string; // HTML formatted content
   chapters?: IChapter[];
   isTopCombine: boolean;
+  status: "ACTIVE" | "INACTIVE" | "PENDING";
   createdAt: Date;
   updatedAt: Date;
 }
@@ -35,6 +36,12 @@ const BookSummarySchema = new Schema<IBookSummary>(
     content: { type: String, required: true }, // Rich HTML content
     chapters: { type: [ChapterSchema], default: [] },
     isTopCombine: { type: Boolean, default: true, index: true },
+    status: {
+      type: String,
+      enum: ["ACTIVE", "INACTIVE", "PENDING"],
+      default: "ACTIVE",
+      index: true,
+    },
   },
   {
     timestamps: true,

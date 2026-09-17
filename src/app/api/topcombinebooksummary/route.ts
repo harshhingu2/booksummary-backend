@@ -9,10 +9,11 @@ export async function GET(request: NextRequest) {
     const topic = searchParams.get("topic") || searchParams.get("category");
     const search = searchParams.get("search");
     const isTopCombine = searchParams.get("isTopCombine");
+    const status = searchParams.get("status");
     const bypassCache = searchParams.get("nocache") === "true";
 
     // Generate unique cache key based on query parameters
-    const cacheKey = `topcombinebooksummary:${topic || ""}:${search || ""}:${isTopCombine || ""}`;
+    const cacheKey = `topcombinebooksummary:${topic || ""}:${search || ""}:${isTopCombine || ""}:${status || ""}`;
 
     if (!bypassCache) {
       const cachedData = apiCache.get(cacheKey);
@@ -28,6 +29,15 @@ export async function GET(request: NextRequest) {
     await connectDB();
 
     const query: any = {};
+
+    // Filter by status (allow explicit query or default to ACTIVE for public clients)
+    if (status) {
+      if (status !== "ALL") {
+        query.status = status;
+      }
+    } else {
+      query.status = { $ne: "INACTIVE" }; // Defaults to not inactive
+    }
 
     if (topic) {
       query.topic = { $regex: topic, $options: "i" };

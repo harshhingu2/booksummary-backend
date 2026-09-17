@@ -9,9 +9,10 @@ export async function GET(request: NextRequest) {
     const topic = searchParams.get("topic") || searchParams.get("category");
     const search = searchParams.get("search");
     const isFeatured = searchParams.get("isFeatured");
+    const status = searchParams.get("status");
     const bypassCache = searchParams.get("nocache") === "true";
 
-    const cacheKey = "individualbooks:" + (topic || "") + ":" + (search || "") + ":" + (isFeatured || "");
+    const cacheKey = "individualbooks:" + (topic || "") + ":" + (search || "") + ":" + (isFeatured || "") + ":" + (status || "");
 
     if (!bypassCache) {
       const cachedData = apiCache.get(cacheKey);
@@ -27,6 +28,15 @@ export async function GET(request: NextRequest) {
     await connectDB();
 
     const query: any = {};
+
+    // Filter by status (allow explicit query or default to ACTIVE for public clients)
+    if (status) {
+      if (status !== "ALL") {
+        query.status = status;
+      }
+    } else {
+      query.status = { $ne: "INACTIVE" }; // Defaults to not inactive
+    }
 
     if (topic && topic !== "All") {
       query.topic = { $regex: topic, $options: "i" };

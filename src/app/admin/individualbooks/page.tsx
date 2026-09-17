@@ -19,6 +19,7 @@ interface IndividualBookItem {
   content: string;
   chapters?: Chapter[];
   isFeatured?: boolean;
+  status: "ACTIVE" | "INACTIVE" | "PENDING";
   createdAt: string;
 }
 
@@ -26,6 +27,7 @@ export default function AdminIndividualBooksPage() {
   const [books, setBooks] = useState<IndividualBookItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("ALL");
   const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
 
   // Modal State for Add & Edit
@@ -44,7 +46,8 @@ export default function AdminIndividualBooksPage() {
     audioUrl: "",
     readingTimeMinutes: 12,
     content: "",
-    isFeatured: false, // Newline-separated list of chapter titles
+    isFeatured: false,
+    status: "PENDING" as "ACTIVE" | "INACTIVE" | "PENDING",
   });
 
   const fetchBooks = async () => {
@@ -52,6 +55,7 @@ export default function AdminIndividualBooksPage() {
       setLoading(true);
       const params = new URLSearchParams();
       if (search) params.append("search", search);
+      if (statusFilter && statusFilter !== "ALL") params.append("status", statusFilter);
 
       const res = await fetch(`/api/admin/individualbooks?${params.toString()}`, { cache: "no-store" });
       const data = await res.json();
@@ -67,7 +71,7 @@ export default function AdminIndividualBooksPage() {
 
   useEffect(() => {
     fetchBooks();
-  }, [search]);
+  }, [search, statusFilter]);
 
   const handleOpenAddModal = () => {
     setEditingId(null);
@@ -79,14 +83,15 @@ export default function AdminIndividualBooksPage() {
       audioUrl: "",
       readingTimeMinutes: 12,
       content: "",
-    isFeatured: false,
+      isFeatured: false,
+      status: "PENDING",
     });
     setShowModal(true);
   };
 
   const handleOpenEditModal = (book: IndividualBookItem) => {
     setEditingId(book._id);
-        setFormData({
+    setFormData({
       title: book.title,
       author: book.author || "",
       topic: book.topic || "Productivity",
@@ -95,6 +100,7 @@ export default function AdminIndividualBooksPage() {
       readingTimeMinutes: book.readingTimeMinutes || 12,
       content: book.content || "",
       isFeatured: !!book.isFeatured,
+      status: (book.status || "ACTIVE") as "ACTIVE" | "INACTIVE" | "PENDING",
     });
     setShowModal(true);
   };
@@ -178,6 +184,7 @@ export default function AdminIndividualBooksPage() {
         readingTimeMinutes: Number(formData.readingTimeMinutes) || 10,
         content: formData.content,
         isFeatured: formData.isFeatured,
+        status: formData.status || "ACTIVE",
       };
 
       const url = editingId ? `/api/admin/individualbooks/${editingId}` : "/api/admin/individualbooks";
@@ -204,6 +211,25 @@ export default function AdminIndividualBooksPage() {
       setMessage({ text: err.message || "Failed to save book", type: "error" });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleStatusChange = async (bookId: string, newStatus: "ACTIVE" | "INACTIVE" | "PENDING") => {
+    try {
+      const res = await fetch(`/api/admin/individualbooks/${bookId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setBooks((prev) => prev.map((b) => (b._id === bookId ? { ...b, status: newStatus } : b)));
+        setMessage({ text: `Status updated to ${newStatus}`, type: "success" });
+      } else {
+        setMessage({ text: data.error || "Failed to update status", type: "error" });
+      }
+    } catch (err: any) {
+      setMessage({ text: err.message || "Error updating status", type: "error" });
     }
   };
 
@@ -392,28 +418,54 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
           onChange={(e) => setSearch(e.target.value)}
           style={styles.searchInput}
         />
-        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <label style={{ color: "#94A3B8", fontSize: "0.85rem", fontWeight: 600, whiteSpace: "nowrap" }}>
-            AI Scraper:
-          </label>
-          <select
-            value={aiProvider}
-            onChange={(e) => setAiProvider(e.target.value as "chatgpt" | "deepseek")}
-            style={{
-              padding: "8px 12px",
-              backgroundColor: "#1E293B",
-              border: "1px solid #334155",
-              borderRadius: "6px",
-              color: "#F8FAFC",
-              fontSize: "0.85rem",
-              fontWeight: 600,
-              cursor: "pointer",
-              outline: "none",
-            }}
-          >
-            <option value="chatgpt">🤖 ChatGPT (chatgpt.com)</option>
-            <option value="deepseek">🐋 DeepSeek (chat.deepseek.com)</option>
-          </select>
+        <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <label style={{ color: "#94A3B8", fontSize: "0.85rem", fontWeight: 600 }}>Status:</label>
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              style={{
+                padding: "8px 12px",
+                backgroundColor: "#1E293B",
+                border: "1px solid #334155",
+                borderRadius: "6px",
+                color: "#F8FAFC",
+                fontSize: "0.85rem",
+                fontWeight: 600,
+                cursor: "pointer",
+                outline: "none",
+              }}
+            >
+              <option value="ALL">All Statuses</option>
+              <option value="ACTIVE">🟢 Active</option>
+              <option value="PENDING">🟡 Pending</option>
+              <option value="INACTIVE">🔴 Inactive</option>
+            </select>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <label style={{ color: "#94A3B8", fontSize: "0.85rem", fontWeight: 600, whiteSpace: "nowrap" }}>
+              AI Scraper:
+            </label>
+            <select
+              value={aiProvider}
+              onChange={(e) => setAiProvider(e.target.value as "chatgpt" | "deepseek")}
+              style={{
+                padding: "8px 12px",
+                backgroundColor: "#1E293B",
+                border: "1px solid #334155",
+                borderRadius: "6px",
+                color: "#F8FAFC",
+                fontSize: "0.85rem",
+                fontWeight: 600,
+                cursor: "pointer",
+                outline: "none",
+              }}
+            >
+              <option value="chatgpt">🤖 ChatGPT (chatgpt.com)</option>
+              <option value="deepseek">🐋 DeepSeek (chat.deepseek.com)</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -430,84 +482,124 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
                 <th style={styles.th}>Topic</th>
                 <th style={styles.th}>Read Time</th>
                 <th style={styles.th}>Audiobook</th>
+                <th style={styles.th}>Status</th>
                 <th style={styles.th}>Featured</th>
                 <th style={styles.th}>Actions</th>
               </tr>
             </thead>
             <tbody>
-              {books.map((book) => (
-                <tr key={book._id} style={styles.tr}>
-                  <td style={styles.td}>
-                    <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
-                      {book.coverImage ? (
-                        <img
-                          src={book.coverImage}
-                          alt={book.title}
-                          style={{ width: "42px", height: "58px", borderRadius: "6px", objectFit: "cover" }}
-                        />
-                      ) : (
-                        <div style={{ width: "42px", height: "58px", borderRadius: "6px", backgroundColor: "#334155" }} />
-                      )}
-                      <div>
-                        <div style={{ fontWeight: 600, color: "#FFFFFF" }}>{book.title}</div>
-                        {book.author && <div style={{ fontSize: "0.8rem", color: "#94A3B8" }}>by {book.author}</div>}
-                        
+              {books.map((book) => {
+                const bookStatus = book.status || "ACTIVE";
+                return (
+                  <tr key={book._id} style={styles.tr}>
+                    <td style={styles.td}>
+                      <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                        {book.coverImage ? (
+                          <img
+                            src={book.coverImage}
+                            alt={book.title}
+                            style={{ width: "42px", height: "58px", borderRadius: "6px", objectFit: "cover" }}
+                          />
+                        ) : (
+                          <div style={{ width: "42px", height: "58px", borderRadius: "6px", backgroundColor: "#334155" }} />
+                        )}
+                        <div>
+                          <div style={{ fontWeight: 600, color: "#FFFFFF" }}>{book.title}</div>
+                          {book.author && <div style={{ fontSize: "0.8rem", color: "#94A3B8" }}>by {book.author}</div>}
+                        </div>
                       </div>
-                    </div>
-                  </td>
-                  <td style={styles.td}>
-                    <span style={styles.badge}>{book.topic}</span>
-                  </td>
-                  <td style={styles.td}>{book.readingTimeMinutes} mins</td>
-                  <td style={styles.td}>
-                    {book.audioUrl ? (
-                      <a
-                        href={book.audioUrl}
-                        target="_blank"
-                        rel="noreferrer"
-                        style={{ color: "#10B981", fontSize: "0.75rem", fontWeight: 600, textDecoration: "none" }}
-                      >
-                        🎧 Has Audio
-                      </a>
-                    ) : (
-                      <span style={{ color: "#64748B", fontSize: "0.75rem" }}>None</span>
-                    )}
-                  </td>
-                  <td style={styles.td}>
-                    <button
-                      onClick={() => handleToggleFeatured(book)}
-                      style={{
-                        ...styles.toggleBtn,
-                        backgroundColor: book.isFeatured ? "#10B981" : "#334155",
-                      }}
-                    >
-                      {book.isFeatured ? "Featured" : "Standard"}
-                    </button>
-                  </td>
-                  <td style={styles.td}>
-                    <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-                      <button
-                        onClick={() => handleOpenAiModal(book)}
-                        disabled={generatingId === book._id}
+                    </td>
+                    <td style={styles.td}>
+                      <span style={styles.badge}>{book.topic}</span>
+                    </td>
+                    <td style={styles.td}>{book.readingTimeMinutes} mins</td>
+                    <td style={styles.td}>
+                      {book.audioUrl ? (
+                        <a
+                          href={book.audioUrl}
+                          target="_blank"
+                          rel="noreferrer"
+                          style={{ color: "#10B981", fontSize: "0.75rem", fontWeight: 600, textDecoration: "none" }}
+                        >
+                          🎧 Has Audio
+                        </a>
+                      ) : (
+                        <span style={{ color: "#64748B", fontSize: "0.75rem" }}>None</span>
+                      )}
+                    </td>
+                    <td style={styles.td}>
+                      <select
+                        value={bookStatus}
+                        onChange={(e) => handleStatusChange(book._id, e.target.value as "ACTIVE" | "INACTIVE" | "PENDING")}
                         style={{
-                          ...styles.aiBtn,
-                          opacity: generatingId === book._id ? 0.6 : 1,
-                          cursor: generatingId === book._id ? "wait" : "pointer",
+                          padding: "4px 8px",
+                          borderRadius: "6px",
+                          fontSize: "0.75rem",
+                          fontWeight: 700,
+                          cursor: "pointer",
+                          outline: "none",
+                          border: "1px solid",
+                          backgroundColor:
+                            bookStatus === "ACTIVE"
+                              ? "rgba(16, 185, 129, 0.15)"
+                              : bookStatus === "PENDING"
+                              ? "rgba(245, 158, 11, 0.15)"
+                              : "rgba(239, 68, 68, 0.15)",
+                          borderColor:
+                            bookStatus === "ACTIVE"
+                              ? "rgba(16, 185, 129, 0.4)"
+                              : bookStatus === "PENDING"
+                              ? "rgba(245, 158, 11, 0.4)"
+                              : "rgba(239, 68, 68, 0.4)",
+                          color:
+                            bookStatus === "ACTIVE"
+                              ? "#34D399"
+                              : bookStatus === "PENDING"
+                              ? "#FBBF24"
+                              : "#F87171",
                         }}
-                        title={`Configure prompt and generate summary using ${aiProvider === "deepseek" ? "DeepSeek" : "ChatGPT"}`}
                       >
-                        {generatingId === book._id ? "⚡ Generating..." : "⚡ AI Content"}
+                        <option value="ACTIVE" style={{ backgroundColor: "#1E293B", color: "#34D399" }}>ACTIVE</option>
+                        <option value="PENDING" style={{ backgroundColor: "#1E293B", color: "#FBBF24" }}>PENDING</option>
+                        <option value="INACTIVE" style={{ backgroundColor: "#1E293B", color: "#F87171" }}>INACTIVE</option>
+                      </select>
+                    </td>
+                    <td style={styles.td}>
+                      <button
+                        onClick={() => handleToggleFeatured(book)}
+                        style={{
+                          ...styles.toggleBtn,
+                          backgroundColor: book.isFeatured ? "#10B981" : "#334155",
+                        }}
+                      >
+                        {book.isFeatured ? "Featured" : "Standard"}
                       </button>
-                      <button onClick={() => handleOpenEditModal(book)} style={styles.editBtn}>
-                        Edit
-                      </button>
-                      <button onClick={() => handleDeleteBook(book._id, book.title)} style={styles.deleteBtn}>
-                        Delete
-                      </button>
-                    </div>
-                  </td>
-                </tr>
-              ))}
+                    </td>
+                    <td style={styles.td}>
+                      <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                        <button
+                          onClick={() => handleOpenAiModal(book)}
+                          disabled={generatingId === book._id}
+                          style={{
+                            ...styles.aiBtn,
+                            opacity: generatingId === book._id ? 0.6 : 1,
+                            cursor: generatingId === book._id ? "wait" : "pointer",
+                          }}
+                          title={`Configure prompt and generate summary using ${aiProvider === "deepseek" ? "DeepSeek" : "ChatGPT"}`}
+                        >
+                          {generatingId === book._id ? "⚡ Generating..." : "⚡ AI Content"}
+                        </button>
+                        <button onClick={() => handleOpenEditModal(book)} style={styles.editBtn}>
+                          Edit
+                        </button>
+                        <button onClick={() => handleDeleteBook(book._id, book.title)} style={styles.deleteBtn}>
+                          Delete
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
             </tbody>
           </table>
         )}
@@ -660,7 +752,26 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
       {showModal && (
         <div style={styles.modalBackdrop}>
           <div style={styles.modalContent}>
-            <h2 style={styles.modalTitle}>{editingId ? "Edit Individual Book" : "Add New Individual Book"}</h2>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "18px" }}>
+              <h2 style={{ ...styles.modalTitle, margin: 0 }}>{editingId ? "Edit Individual Book" : "Add New Individual Book"}</h2>
+              <button
+                type="button"
+                onClick={() => setShowModal(false)}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: "#94A3B8",
+                  fontSize: "1.3rem",
+                  cursor: "pointer",
+                  padding: "4px 8px",
+                  lineHeight: 1,
+                  borderRadius: "4px",
+                }}
+                title="Close"
+              >
+                ✕
+              </button>
+            </div>
             <form onSubmit={handleSaveBook} style={styles.form}>
               <div style={{ display: "flex", gap: "16px" }}>
                 <div style={{ flex: 1 }}>
@@ -784,17 +895,32 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
                 />
               </div>
 
-              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
-                <input
-                  type="checkbox"
-                  id="isFeatured"
-                  checked={formData.isFeatured}
-                  onChange={(e) => setFormData({ ...formData, isFeatured: e.target.checked })}
-                  style={{ width: "18px", height: "18px", cursor: "pointer" }}
-                />
-                <label htmlFor="isFeatured" style={{ color: "#F8FAFC", fontSize: "0.9rem", cursor: "pointer" }}>
-                  Feature this book in Hero / Spotlight showcase
-                </label>
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", alignItems: "center" }}>
+                <div>
+                  <label style={styles.label}>Publication Status</label>
+                  <select
+                    value={formData.status}
+                    onChange={(e) => setFormData({ ...formData, status: e.target.value as "ACTIVE" | "INACTIVE" | "PENDING" })}
+                    style={styles.modalInput}
+                  >
+                    <option value="ACTIVE">🟢 ACTIVE (Live / Published)</option>
+                    <option value="PENDING">🟡 PENDING (Draft / In Review)</option>
+                    <option value="INACTIVE">🔴 INACTIVE (Hidden)</option>
+                  </select>
+                </div>
+
+                <div style={{ display: "flex", alignItems: "center", gap: "10px", marginTop: "20px" }}>
+                  <input
+                    type="checkbox"
+                    id="isFeatured"
+                    checked={formData.isFeatured}
+                    onChange={(e) => setFormData({ ...formData, isFeatured: e.target.checked })}
+                    style={{ width: "18px", height: "18px", cursor: "pointer" }}
+                  />
+                  <label htmlFor="isFeatured" style={{ color: "#F8FAFC", fontSize: "0.9rem", cursor: "pointer" }}>
+                    Feature this book in Spotlight
+                  </label>
+                </div>
               </div>
 
               <div style={styles.modalActions}>

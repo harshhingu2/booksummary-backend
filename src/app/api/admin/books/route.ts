@@ -27,6 +27,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search") || "";
     const topic = searchParams.get("topic") || "";
+    const status = searchParams.get("status") || "";
 
     const query: any = {};
     if (search) {
@@ -37,6 +38,9 @@ export async function GET(request: NextRequest) {
     }
     if (topic) {
       query.topic = { $regex: topic, $options: "i" };
+    }
+    if (status && status !== "ALL") {
+      query.status = status;
     }
 
     const books = await BookSummary.find(query).sort({ createdAt: -1 });
