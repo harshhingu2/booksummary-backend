@@ -17,7 +17,7 @@ function parseArgs() {
   const options = {
     login: false,
     prompt: '',
-    headless: true, // Default to visible for stability with Cloudflare & interactive use
+    headless: false, // Default to visible for stability with Cloudflare & interactive use
     timeout: 120000,
     output: null,
     help: false

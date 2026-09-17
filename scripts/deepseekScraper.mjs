@@ -304,47 +304,79 @@ async function scrapeDeepSeek(prompt, options = {}) {
     }
 
     console.log('[DeepSeek Scraper] Prompt sent! Waiting for response to generate...');
-    await new Promise(r => setTimeout(r, 3000));
-
-    // Wait for generation to start and complete
-    const startTime = Date.now();
-    let isGenerating = true;
-
+    
+    // DeepSeek UI selectors for generation indicators & content
     const stopButtonSelectors = [
       'div[role="button"][aria-label*="Stop"]',
       'button[aria-label*="Stop"]',
-      'div.ds-stop-button'
+      'div.ds-stop-button',
+      '[class*="stop-button"]',
+      '[class*="ds-icon-button"]:has(svg[class*="stop"])'
     ];
+
+    const copyButtonSelectors = [
+      'div[role="button"][aria-label*="Copy"]',
+      'button[aria-label*="Copy"]',
+      '[class*="ds-icon-button"]:has(svg[class*="copy"])',
+      '.ds-assistant-message-actions'
+    ];
+
+    // Wait at least 4 seconds for generation to commence and render first tokens
+    await new Promise(r => setTimeout(r, 4000));
+
+    const startTime = Date.now();
+    let isGenerating = true;
+    let lastLength = 0;
+    let stableCount = 0;
 
     while (isGenerating) {
       if (Date.now() - startTime > timeout) {
         throw new Error(`Timeout after ${timeout / 1000}s waiting for DeepSeek response.`);
       }
 
-      let foundStopBtn = false;
-      for (const stopSel of stopButtonSelectors) {
-        const btn = await page.$(stopSel);
-        if (btn) {
-          foundStopBtn = true;
-          break;
+      // Check if Stop button exists and is visible
+      const isStopPresent = await page.evaluate((selectors) => {
+        for (const sel of selectors) {
+          try {
+            const el = document.querySelector(sel);
+            if (el && el.offsetParent !== null) return true;
+          } catch {}
         }
-      }
+        return false;
+      }, stopButtonSelectors);
 
-      if (!foundStopBtn) {
-        await new Promise(r => setTimeout(r, 2000));
-        let recheckStop = false;
-        for (const stopSel of stopButtonSelectors) {
-          const btn = await page.$(stopSel);
-          if (btn) {
-            recheckStop = true;
-            break;
-          }
+      // Check current text length of the latest response
+      const currentTextLength = await page.evaluate(() => {
+        const assistantContainers = Array.from(document.querySelectorAll(
+          '.ds-assistant-message-main-content, [class*="ds-assistant-message-main-content"], .ds-markdown, .markdown'
+        ));
+        if (assistantContainers.length > 0) {
+          const lastMsg = assistantContainers[assistantContainers.length - 1];
+          return (lastMsg.innerText || '').trim().length;
         }
-        if (!recheckStop) {
-          isGenerating = false;
-        }
+        return 0;
+      });
+
+      if (isStopPresent) {
+        // Active streaming is still occurring
+        stableCount = 0;
+        lastLength = currentTextLength;
+        await new Promise(r => setTimeout(r, 1500));
       } else {
-        await new Promise(r => setTimeout(r, 1200));
+        // Stop button is gone. Check if content has stopped changing and has substantial length (> 50 chars)
+        if (currentTextLength > 50 && currentTextLength === lastLength) {
+          stableCount++;
+          // Require at least 3 consecutive stable checks (total ~4.5s) to guarantee completion
+          if (stableCount >= 3) {
+            isGenerating = false;
+          } else {
+            await new Promise(r => setTimeout(r, 1500));
+          }
+        } else {
+          lastLength = currentTextLength;
+          stableCount = 0;
+          await new Promise(r => setTimeout(r, 1500));
+        }
       }
     }
 

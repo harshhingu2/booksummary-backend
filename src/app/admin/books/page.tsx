@@ -205,15 +205,88 @@ export default function AdminBooksPage() {
   const [aiProvider, setAiProvider] = useState<"chatgpt" | "deepseek">("chatgpt");
   const [generatingId, setGeneratingId] = useState<string | null>(null);
 
-  const handleGenerateContent = async (book: BookItem) => {
-    const providerLabel = aiProvider === "deepseek" ? "DeepSeek" : "ChatGPT";
-    const confirmGen = confirm(
-      `Generate full AI summary content for "${book.title}" using ${providerLabel}?\n\nThis will run the ${providerLabel} scraper headless, generate high-impact formatted HTML, and save directly to this summary's content field in the database.`
-    );
-    if (!confirmGen) return;
+  // AI Prompt Modal State
+  const [aiModalOpen, setAiModalOpen] = useState(false);
+  const [selectedBookForAi, setSelectedBookForAi] = useState<BookItem | null>(null);
+  const [modalPromptText, setModalPromptText] = useState("");
+  const [modalAiProvider, setModalAiProvider] = useState<"chatgpt" | "deepseek">("chatgpt");
+  const [modalHeadless, setModalHeadless] = useState(true);
+  const [loadingPrompt, setLoadingPrompt] = useState(false);
+
+  const handleOpenAiModal = async (book: BookItem) => {
+    setSelectedBookForAi(book);
+    setModalAiProvider(aiProvider);
+    setModalHeadless(true); // Always resets to unchecked (headless: true) for each session
+    setAiModalOpen(true);
+    setLoadingPrompt(true);
+
+    try {
+      // Fetch active default multi-book prompt from DB
+      const res = await fetch("/api/admin/prompts?type=multibook", { cache: "no-store" });
+      const data = await res.json();
+      let promptTemplate = "";
+      if (data.success && data.prompts && data.prompts.length > 0) {
+        const activePrompt = data.prompts.find((p: any) => p.isDefault && p.isActive) || data.prompts[0];
+        promptTemplate = activePrompt.content || "";
+      }
+
+      const topicVal = book.topic || "General";
+      const booksVal = book.title || "";
+      const contentTypeVal = "Multi-Book Synthesis";
+
+      if (promptTemplate) {
+        // Substitute only 2 main variables: topic/title and contentType (plus legacy tags if any)
+        let populatedPrompt = promptTemplate
+          .replace(/\{\{topic\}\}/gi, topicVal)
+          .replace(/\{\{books\}\}/gi, booksVal)
+          .replace(/\{\{title\}\}/gi, booksVal)
+          .replace(/\{\{contentType\}\}/gi, contentTypeVal)
+          .replace(/\{\{author\}\}/gi, "")
+          .replace(/\{\{audience\}\}/gi, "US/Western adults")
+          .replace(/\{\{targetLength\}\}/gi, "~2,000 words")
+          .replace(/\{\{goal\}\}/gi, "[Decided by you]");
+
+        // If the prompt template didn't have variable tags, ensure the 2-variable header is at the top
+        if (!promptTemplate.includes("{{topic}}") && !promptTemplate.includes("{{books}}") && !promptTemplate.includes("{{title}}")) {
+          const varHeader = `> **Topic / Title:** ${topicVal} — ${booksVal}\n> **Content Type:** ${contentTypeVal}\n\n`;
+          populatedPrompt = varHeader + populatedPrompt;
+        }
+
+        setModalPromptText(populatedPrompt);
+      } else {
+        // Fallback with only the 2 variables at top
+        const fallback = `> **Topic / Title:** ${topicVal} — ${booksVal}
+> **Content Type:** ${contentTypeVal}
+
+# DUMBSCROLL — MASTER CONTENT GENERATION PROMPT
+
+You are the lead content writer and intellectual editor for **Dumbscroll**, a premium knowledge and book-summary platform.
+
+Your task is NOT to create an ordinary book summary.
+
+Transform the strongest ideas from the provided books into a **deeply engaging, story-driven, highly readable and highly listenable intellectual experience** that makes the reader think:
+
+> **“I never looked at this idea that way before.”**
+
+Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, <ul>, <li>, <blockquote>, and <br> without wrapping inside <html> or <body> tags).`;
+        setModalPromptText(fallback);
+      }
+    } catch (err) {
+      console.error("Failed to load prompt template:", err);
+      setModalPromptText(`> **Topic / Title:** ${book.topic || "General"} — ${book.title}\n> **Content Type:** Multi-Book Synthesis\n\nGenerate full high-impact summary content formatted in clean semantic HTML.`);
+    } finally {
+      setLoadingPrompt(false);
+    }
+  };
+
+  const handleExecuteAiScraper = async () => {
+    if (!selectedBookForAi) return;
+    const book = selectedBookForAi;
+    const providerLabel = modalAiProvider === "deepseek" ? "DeepSeek" : "ChatGPT";
 
     try {
       setGeneratingId(book._id);
+      setAiModalOpen(false);
       setMessage({ text: `Generating AI content with ${providerLabel} for "${book.title}"... Please wait.`, type: "success" });
 
       const res = await fetch("/api/admin/generate-content", {
@@ -224,7 +297,9 @@ export default function AdminBooksPage() {
           type: "topcombine",
           title: book.title,
           topic: book.topic || "Productivity",
-          provider: aiProvider,
+          provider: modalAiProvider,
+          customPrompt: modalPromptText,
+          headless: modalHeadless,
         }),
       });
 
@@ -401,14 +476,14 @@ export default function AdminBooksPage() {
                   <td style={styles.td}>
                     <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
                       <button
-                        onClick={() => handleGenerateContent(b)}
+                        onClick={() => handleOpenAiModal(b)}
                         disabled={generatingId === b._id}
                         style={{
                           ...styles.aiBtn,
                           opacity: generatingId === b._id ? 0.6 : 1,
                           cursor: generatingId === b._id ? "wait" : "pointer",
                         }}
-                        title={`Generate summary content using ${aiProvider === "deepseek" ? "DeepSeek" : "ChatGPT"} scraper and save to DB`}
+                        title={`Configure prompt and generate summary using ${aiProvider === "deepseek" ? "DeepSeek" : "ChatGPT"}`}
                       >
                         {generatingId === b._id ? "⚡ Generating..." : "⚡ AI Content"}
                       </button>
@@ -426,6 +501,144 @@ export default function AdminBooksPage() {
           </table>
         )}
       </div>
+
+      {/* AI Prompt Configuration & Scraper Modal */}
+      {aiModalOpen && selectedBookForAi && (
+        <div style={styles.modalBackdrop}>
+          <div style={{ ...styles.modalContent, maxWidth: "880px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", borderBottom: "1px solid #334155", paddingBottom: "12px" }}>
+              <div>
+                <h2 style={{ ...styles.modalTitle, margin: 0, fontSize: "1.25rem" }}>
+                  ⚡ AI Content Generator — {selectedBookForAi.title}
+                </h2>
+                <p style={{ color: "#94A3B8", fontSize: "0.82rem", margin: "4px 0 0 0" }}>
+                  Review variables and prompt instructions before launching the headless scraper.
+                </p>
+              </div>
+              <button
+                onClick={() => setAiModalOpen(false)}
+                style={{ background: "transparent", border: "none", color: "#94A3B8", fontSize: "1.2rem", cursor: "pointer" }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Variable summary badge strip */}
+            <div style={{ display: "flex", gap: "10px", flexWrap: "wrap", marginBottom: "16px", padding: "12px 14px", backgroundColor: "#0F172A", borderRadius: "8px", border: "1px solid #334155" }}>
+              <div style={{ fontSize: "0.8rem", color: "#94A3B8" }}>
+                <span style={{ color: "#64748B" }}>Topic:</span> <strong style={{ color: "#F8FAFC" }}>{selectedBookForAi.topic || "Productivity"}</strong>
+              </div>
+              <div style={{ fontSize: "0.8rem", color: "#94A3B8" }}>
+                <span style={{ color: "#64748B" }}>Books / Title:</span> <strong style={{ color: "#F8FAFC" }}>{selectedBookForAi.title}</strong>
+              </div>
+              <div style={{ fontSize: "0.8rem", color: "#94A3B8" }}>
+                <span style={{ color: "#64748B" }}>Content Type:</span> <strong style={{ color: "#38BDF8" }}>Multi-Book Synthesis</strong>
+              </div>
+            </div>
+
+            {/* Provider Selector & Browser Visibility Toggle */}
+            <div style={{ marginBottom: "14px", display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "12px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "12px" }}>
+                <label style={{ ...styles.label, margin: 0 }}>Scraper Engine:</label>
+                <div style={{ display: "flex", gap: "8px" }}>
+                  <button
+                    type="button"
+                    onClick={() => setModalAiProvider("chatgpt")}
+                    style={{
+                      padding: "6px 14px",
+                      borderRadius: "6px",
+                      fontSize: "0.85rem",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      backgroundColor: modalAiProvider === "chatgpt" ? "#10A37F" : "#1E293B",
+                      color: "#FFFFFF",
+                      border: modalAiProvider === "chatgpt" ? "1px solid #10A37F" : "1px solid #334155",
+                    }}
+                  >
+                    🟢 ChatGPT Scraper
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setModalAiProvider("deepseek")}
+                    style={{
+                      padding: "6px 14px",
+                      borderRadius: "6px",
+                      fontSize: "0.85rem",
+                      fontWeight: 600,
+                      cursor: "pointer",
+                      backgroundColor: modalAiProvider === "deepseek" ? "#4F46E5" : "#1E293B",
+                      color: "#FFFFFF",
+                      border: modalAiProvider === "deepseek" ? "1px solid #4F46E5" : "1px solid #334155",
+                    }}
+                  >
+                    🔵 DeepSeek Scraper
+                  </button>
+                </div>
+              </div>
+
+              {/* Headless / Visible Browser Toggle */}
+              <label style={{ display: "flex", alignItems: "center", gap: "6px", cursor: "pointer", fontSize: "0.82rem", color: "#CBD5E1", backgroundColor: "#0F172A", padding: "6px 10px", borderRadius: "6px", border: "1px solid #334155" }}>
+                <input
+                  type="checkbox"
+                  checked={!modalHeadless}
+                  onChange={(e) => setModalHeadless(!e.target.checked)}
+                  style={{ cursor: "pointer" }}
+                />
+                <span>🖥️ <strong>Show Live Browser Window</strong> (Headful)</span>
+              </label>
+            </div>
+
+            {/* Prompt Textarea */}
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                <label style={styles.label}>
+                  Prompt to Send to Scraper (Variables at Top + Collection Prompt Body):
+                </label>
+                {loadingPrompt && <span style={{ fontSize: "0.75rem", color: "#38BDF8" }}>Loading prompt template...</span>}
+              </div>
+              <textarea
+                rows={14}
+                value={modalPromptText}
+                onChange={(e) => setModalPromptText(e.target.value)}
+                disabled={loadingPrompt}
+                style={{
+                  ...styles.modalTextarea,
+                  fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+                  fontSize: "0.84rem",
+                  lineHeight: "1.45",
+                  backgroundColor: "#0B1120",
+                  border: "1px solid #3b82f6",
+                }}
+              />
+            </div>
+
+            {/* Actions */}
+            <div style={{ ...styles.modalActions, marginTop: "16px" }}>
+              <button
+                type="button"
+                onClick={() => setAiModalOpen(false)}
+                style={styles.cancelBtn}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleExecuteAiScraper}
+                disabled={loadingPrompt || !modalPromptText.trim()}
+                style={{
+                  ...styles.primaryBtn,
+                  backgroundColor: modalAiProvider === "deepseek" ? "#4F46E5" : "#10A37F",
+                  padding: "10px 22px",
+                  fontSize: "0.9rem",
+                  fontWeight: 700,
+                }}
+              >
+                ⚡ Start {modalAiProvider === "deepseek" ? "DeepSeek" : "ChatGPT"} & Generate Content
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Add / Edit Modal */}
       {showModal && (

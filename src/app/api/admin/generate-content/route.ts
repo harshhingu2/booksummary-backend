@@ -79,15 +79,18 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
 4. Actionable Real-World Applications (structured as bullet points with <ul> and <li>)`;
     }
 
-    console.log(`[AI Generation] Triggering ${selectedProvider.toUpperCase()} scraper for: "${title}" (${type})...`);
+    const isHeadless = body.headless !== undefined ? Boolean(body.headless) : false; // Default to false (visible window) so user can see it live
+
+    console.log(`[AI Generation] Triggering ${selectedProvider.toUpperCase()} scraper for: "${title}" (${type}, headless: ${isHeadless})...`);
 
     // Run scraper in child process for memory isolation & headless stability
     const scriptFileName = selectedProvider === "deepseek" ? "deepseekScraper.mjs" : "chatgptScraper.mjs";
     const scriptPath = path.join(process.cwd(), "scripts", scriptFileName);
+    const headlessFlag = isHeadless ? "--headless" : "--headful";
     const { stdout, stderr } = await execFilePromise(
       process.execPath,
-      [scriptPath, "--headless", prompt],
-      { timeout: 150000, maxBuffer: 10 * 1024 * 1024 }
+      [scriptPath, headlessFlag, prompt],
+      { timeout: 180000, maxBuffer: 10 * 1024 * 1024 }
     );
 
     // Extract content between delimiters

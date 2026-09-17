@@ -23,12 +23,8 @@ The goal is **understanding, not replacement**.
 
 # INPUT
 
-**Topic / Category:** {{topic}}
-**Books:** {{books}}
+**Topic / Title:** {{topic}}
 **Content Type:** {{contentType}}
-**Target Audience:** {{audience}}
-**Target Length:** {{targetLength}}
-**Goal:** {{goal}}
 
 ---
 
@@ -397,7 +393,7 @@ export async function ensureDefaultPrompts() {
         type: "individual",
         description:
           "High-impact, discovery-driven single book summary prompt generating clean semantic HTML formatted for reading and audio.",
-        content: `> **Topic:** {{topic}}\n> **Book:** {{title}} — {{author}}\n> **Content Type:** Single Book Summary\n> **Audience:** US/Western adults\n> **Target Length:** ~1,500 words\n> **Goal:** Help the reader fundamentally understand the core principles, why human behavior happens, and how to apply these ideas in real life.\n\n${MASTER_PROMPT_TEMPLATE}`,
+        content: `> **Topic / Title:** {{topic}} — {{title}}\n> **Content Type:** {{contentType}}\n\n${MASTER_PROMPT_TEMPLATE}`,
         isActive: true,
         isDefault: true,
       },
@@ -406,7 +402,7 @@ export async function ensureDefaultPrompts() {
         type: "multibook",
         description:
           "Deep synthesis across multiple top books on a single theme, contrasting perspectives and surfacing systemic insights in clean HTML.",
-        content: `> **Topic:** {{topic}}\n> **Books:** {{books}}\n> **Content Type:** Multi-Book Synthesis\n> **Audience:** US/Western adults\n> **Target Length:** ~2,000 words\n> **Goal:** Synthesize key agreements, contradictions, and complementary models across these seminal works into one coherent intellectual journey.\n\n${MASTER_PROMPT_TEMPLATE}`,
+        content: `> **Topic / Title:** {{topic}} — {{books}}\n> **Content Type:** {{contentType}}\n\n${MASTER_PROMPT_TEMPLATE}`,
         isActive: true,
         isDefault: true,
       },

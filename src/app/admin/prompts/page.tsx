@@ -441,7 +441,7 @@ export default function AdminPromptsPage() {
               </div>
 
               <div style={styles.formGroup}>
-                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: "6px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
                   <label style={styles.label}>
                     Prompt Instructions / Template <span style={{ color: "#EF4444" }}>*</span>
                   </label>
@@ -449,6 +449,35 @@ export default function AdminPromptsPage() {
                     {formData.content.length} characters
                   </span>
                 </div>
+
+                {/* Variable insertion hint toolbar */}
+                <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap", marginBottom: "8px", padding: "8px 10px", backgroundColor: "#0F172A", borderRadius: "6px", border: "1px solid rgba(255,255,255,0.07)" }}>
+                  <span style={{ fontSize: "0.75rem", color: "#94A3B8", fontWeight: 600 }}>Insert variables:</span>
+                  {(formData.type === "individual"
+                    ? ["{{topic}}", "{{title}}", "{{contentType}}"]
+                    : ["{{topic}}", "{{books}}", "{{contentType}}"]
+                  ).map((variable) => (
+                    <button
+                      key={variable}
+                      type="button"
+                      onClick={() => setFormData((prev) => ({ ...prev, content: prev.content + " " + variable }))}
+                      style={{
+                        padding: "3px 8px",
+                        fontSize: "0.75rem",
+                        fontFamily: "monospace",
+                        backgroundColor: "#1E293B",
+                        color: "#38BDF8",
+                        border: "1px solid #334155",
+                        borderRadius: "4px",
+                        cursor: "pointer",
+                      }}
+                      title={`Click to append ${variable} into template`}
+                    >
+                      + {variable}
+                    </button>
+                  ))}
+                </div>
+
                 <textarea
                   required
                   rows={14}
