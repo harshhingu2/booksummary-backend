@@ -457,10 +457,33 @@ export default function AdminCronsPage() {
 
               <div>
                 <label style={styles.label}>Target Endpoint</label>
+                <div style={{ display: "flex", gap: "6px", marginBottom: "8px", flexWrap: "wrap" }}>
+                  <button
+                    type="button"
+                    onClick={() => setFormData((prev) => ({ ...prev, endpoint: "/api/cron/individual-content", name: prev.name || "Individual Books AI Content Ingestion" }))}
+                    style={{ padding: "4px 8px", fontSize: "0.72rem", borderRadius: "4px", backgroundColor: "#334155", color: "#38BDF8", border: "1px solid #475569", cursor: "pointer" }}
+                  >
+                    📚 Preset: Individual Books AI (/api/cron/individual-content)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFormData((prev) => ({ ...prev, endpoint: "/api/cron/multibook-content", name: prev.name || "Multi-Book AI Content Ingestion" }))}
+                    style={{ padding: "4px 8px", fontSize: "0.72rem", borderRadius: "4px", backgroundColor: "#334155", color: "#A78BFA", border: "1px solid #475569", cursor: "pointer" }}
+                  >
+                    ⚡ Preset: Multi-Book AI (/api/cron/multibook-content)
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setFormData((prev) => ({ ...prev, endpoint: "/api/cron/youtube", name: prev.name || "YouTube Shorts Auto Ingestion" }))}
+                    style={{ padding: "4px 8px", fontSize: "0.72rem", borderRadius: "4px", backgroundColor: "#334155", color: "#F87171", border: "1px solid #475569", cursor: "pointer" }}
+                  >
+                    ▶️ Preset: YouTube (/api/cron/youtube)
+                  </button>
+                </div>
                 <input
                   type="text"
                   required
-                  placeholder="e.g. /api/cron/youtube"
+                  placeholder="e.g. /api/cron/individual-content"
                   value={formData.endpoint}
                   onChange={(e) => setFormData({ ...formData, endpoint: e.target.value })}
                   style={styles.modalInput}

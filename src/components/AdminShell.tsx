@@ -56,6 +56,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
     { label: "Book Summaries", path: "/admin/books", icon: "📚" },
     { label: "Individual Books", path: "/admin/individualbooks", icon: "📖" },
     { label: "AI Prompts", path: "/admin/prompts", icon: "✨" },
+    { label: "Settings", path: "/admin/settings", icon: "⚙️" },
   ];
 
   return (
@@ -83,7 +84,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
 
       {/* Sidebar */}
       <aside className={`admin-sidebar ${isMobileOpen ? "open" : ""}`} style={styles.sidebar}>
-        <div>
+        <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
           <div style={styles.logoBox}>
             <div style={{ display: "flex", alignItems: "center", gap: "12px", flex: 1 }}>
               <span style={styles.logoIcon}>📜</span>
@@ -102,7 +103,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
             </button>
           </div>
 
-          <nav style={styles.nav}>
+          <nav style={{ ...styles.nav, overflowY: "auto", paddingRight: "4px", flex: 1 }}>
             {navItems.map((item) => {
               const isActive = pathname === item.path;
               return (

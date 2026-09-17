@@ -20,6 +20,7 @@ interface IndividualBookItem {
   chapters?: Chapter[];
   isFeatured?: boolean;
   status: "ACTIVE" | "INACTIVE" | "PENDING";
+  needsContentGeneration?: boolean;
   createdAt: string;
 }
 
@@ -48,6 +49,7 @@ export default function AdminIndividualBooksPage() {
     content: "",
     isFeatured: false,
     status: "PENDING" as "ACTIVE" | "INACTIVE" | "PENDING",
+    needsContentGeneration: false,
   });
 
   const fetchBooks = async () => {
@@ -85,6 +87,7 @@ export default function AdminIndividualBooksPage() {
       content: "",
       isFeatured: false,
       status: "PENDING",
+      needsContentGeneration: true, // Default to true when adding so cron picks it up if content empty
     });
     setShowModal(true);
   };
@@ -101,6 +104,7 @@ export default function AdminIndividualBooksPage() {
       content: book.content || "",
       isFeatured: !!book.isFeatured,
       status: (book.status || "ACTIVE") as "ACTIVE" | "INACTIVE" | "PENDING",
+      needsContentGeneration: !!book.needsContentGeneration,
     });
     setShowModal(true);
   };
@@ -185,6 +189,7 @@ export default function AdminIndividualBooksPage() {
         content: formData.content,
         isFeatured: formData.isFeatured,
         status: formData.status || "ACTIVE",
+        needsContentGeneration: formData.needsContentGeneration,
       };
 
       const url = editingId ? `/api/admin/individualbooks/${editingId}` : "/api/admin/individualbooks";
@@ -211,6 +216,27 @@ export default function AdminIndividualBooksPage() {
       setMessage({ text: err.message || "Failed to save book", type: "error" });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleToggleNeedsContent = async (book: IndividualBookItem) => {
+    const nextVal = !book.needsContentGeneration;
+    try {
+      const res = await fetch(`/api/admin/individualbooks/${book._id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ needsContentGeneration: nextVal }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setBooks((prev) => prev.map((b) => (b._id === book._id ? { ...b, needsContentGeneration: nextVal } : b)));
+        setMessage({
+          text: nextVal ? `"${book.title}" queued for automated Cron AI generation!` : `Removed "${book.title}" from AI Cron queue.`,
+          type: "success",
+        });
+      }
+    } catch (err: any) {
+      setMessage({ text: err.message || "Failed to toggle content generation status", type: "error" });
     }
   };
 
@@ -483,6 +509,7 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
                 <th style={styles.th}>Read Time</th>
                 <th style={styles.th}>Audiobook</th>
                 <th style={styles.th}>Status</th>
+                <th style={styles.th}>AI Cron Queue</th>
                 <th style={styles.th}>Featured</th>
                 <th style={styles.th}>Actions</th>
               </tr>
@@ -490,6 +517,9 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
             <tbody>
               {books.map((book) => {
                 const bookStatus = book.status || "ACTIVE";
+                const isQueued = !!book.needsContentGeneration;
+                const hasContent = !!(book.content && book.content.trim().length > 50);
+
                 return (
                   <tr key={book._id} style={styles.tr}>
                     <td style={styles.td}>
@@ -563,6 +593,19 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
                         <option value="PENDING" style={{ backgroundColor: "#1E293B", color: "#FBBF24" }}>PENDING</option>
                         <option value="INACTIVE" style={{ backgroundColor: "#1E293B", color: "#F87171" }}>INACTIVE</option>
                       </select>
+                    </td>
+                    <td style={styles.td}>
+                      <label style={{ display: "inline-flex", alignItems: "center", gap: "6px", cursor: "pointer", padding: "4px 8px", backgroundColor: isQueued ? "rgba(99, 102, 241, 0.2)" : "rgba(255,255,255,0.03)", borderRadius: "6px", border: isQueued ? "1px solid #6366F1" : "1px solid rgba(255,255,255,0.1)" }}>
+                        <input
+                          type="checkbox"
+                          checked={isQueued}
+                          onChange={() => handleToggleNeedsContent(book)}
+                          style={{ cursor: "pointer" }}
+                        />
+                        <span style={{ fontSize: "0.75rem", fontWeight: 600, color: isQueued ? "#A5B4FC" : "#94A3B8" }}>
+                          {isQueued ? "⚡ Auto-Cron" : hasContent ? "✅ Ready" : "⬜ Empty"}
+                        </span>
+                      </label>
                     </td>
                     <td style={styles.td}>
                       <button
@@ -921,6 +964,19 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
                     Feature this book in Spotlight
                   </label>
                 </div>
+              </div>
+
+              <div style={{ padding: "10px 14px", backgroundColor: "#0F172A", borderRadius: "8px", border: "1px solid rgba(99,102,241,0.25)", display: "flex", alignItems: "center", gap: "10px" }}>
+                <input
+                  type="checkbox"
+                  id="needsContentGeneration"
+                  checked={formData.needsContentGeneration}
+                  onChange={(e) => setFormData({ ...formData, needsContentGeneration: e.target.checked })}
+                  style={{ width: "18px", height: "18px", cursor: "pointer" }}
+                />
+                <label htmlFor="needsContentGeneration" style={{ color: "#CBD5E1", fontSize: "0.85rem", cursor: "pointer" }}>
+                  ⚡ <strong>Queue for Automated AI Content Cron</strong> (DeepSeek will automatically write and populate HTML summary)
+                </label>
               </div>
 
               <div style={styles.modalActions}>

@@ -19,6 +19,7 @@ interface BookItem {
   chapters?: Chapter[];
   isTopCombine: boolean;
   status: "ACTIVE" | "INACTIVE" | "PENDING";
+  needsContentGeneration?: boolean;
   createdAt: string;
 }
 
@@ -46,6 +47,7 @@ export default function AdminBooksPage() {
     content: "",
     isTopCombine: true,
     status: "PENDING" as "ACTIVE" | "INACTIVE" | "PENDING",
+    needsContentGeneration: false,
   });
 
   const fetchBooks = async () => {
@@ -82,6 +84,7 @@ export default function AdminBooksPage() {
       content: "",
       isTopCombine: true,
       status: "PENDING",
+      needsContentGeneration: true, // Default to true when adding so cron picks it up
     });
     setShowModal(true);
   };
@@ -97,6 +100,7 @@ export default function AdminBooksPage() {
       content: b.content || "",
       isTopCombine: !!b.isTopCombine,
       status: (b.status || "ACTIVE") as "ACTIVE" | "INACTIVE" | "PENDING",
+      needsContentGeneration: !!b.needsContentGeneration,
     });
     setShowModal(true);
   };
@@ -180,6 +184,7 @@ export default function AdminBooksPage() {
         content: formData.content,
         isTopCombine: formData.isTopCombine,
         status: formData.status || "ACTIVE",
+        needsContentGeneration: formData.needsContentGeneration,
       };
 
       const url = editingId ? `/api/admin/books/${editingId}` : "/api/admin/books";
@@ -206,6 +211,27 @@ export default function AdminBooksPage() {
       setMessage({ text: err.message || "Failed to save summary", type: "error" });
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleToggleNeedsContent = async (book: BookItem) => {
+    const nextVal = !book.needsContentGeneration;
+    try {
+      const res = await fetch(`/api/admin/books/${book._id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ needsContentGeneration: nextVal }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setBooks((prev) => prev.map((b) => (b._id === book._id ? { ...b, needsContentGeneration: nextVal } : b)));
+        setMessage({
+          text: nextVal ? `"${book.title}" queued for automated Multi-Book Cron AI generation!` : `Removed "${book.title}" from AI Cron queue.`,
+          type: "success",
+        });
+      }
+    } catch (err: any) {
+      setMessage({ text: err.message || "Failed to toggle content generation status", type: "error" });
     }
   };
 
@@ -473,6 +499,7 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
                 <th style={styles.th}>Read Time</th>
                 <th style={styles.th}>Audiobook</th>
                 <th style={styles.th}>Status</th>
+                <th style={styles.th}>AI Cron Queue</th>
                 <th style={styles.th}>Top Combine</th>
                 <th style={styles.th}>Actions</th>
               </tr>
@@ -480,6 +507,9 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
             <tbody>
               {books.map((b) => {
                 const bookStatus = b.status || "ACTIVE";
+                const isQueued = !!b.needsContentGeneration;
+                const hasContent = !!(b.content && b.content.trim().length > 50);
+
                 return (
                   <tr key={b._id} style={styles.tr}>
                     <td style={styles.tdTitle}>
@@ -552,6 +582,19 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
                         <option value="PENDING" style={{ backgroundColor: "#1E293B", color: "#FBBF24" }}>PENDING</option>
                         <option value="INACTIVE" style={{ backgroundColor: "#1E293B", color: "#F87171" }}>INACTIVE</option>
                       </select>
+                    </td>
+                    <td style={styles.td}>
+                      <label style={{ display: "inline-flex", alignItems: "center", gap: "6px", cursor: "pointer", padding: "4px 8px", backgroundColor: isQueued ? "rgba(99, 102, 241, 0.2)" : "rgba(255,255,255,0.03)", borderRadius: "6px", border: isQueued ? "1px solid #6366F1" : "1px solid rgba(255,255,255,0.1)" }}>
+                        <input
+                          type="checkbox"
+                          checked={isQueued}
+                          onChange={() => handleToggleNeedsContent(b)}
+                          style={{ cursor: "pointer" }}
+                        />
+                        <span style={{ fontSize: "0.75rem", fontWeight: 600, color: isQueued ? "#A5B4FC" : "#94A3B8" }}>
+                          {isQueued ? "⚡ Auto-Cron" : hasContent ? "✅ Ready" : "⬜ Empty"}
+                        </span>
+                      </label>
                     </td>
                     <td style={styles.td}>
                       <button
@@ -858,13 +901,32 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
               <div>
                 <label style={styles.label}>Summary Content (HTML formatted)</label>
                 <textarea
-                  required
                   rows={8}
-                  placeholder="<h2>1. Core Principle</h2><p>Summary paragraph...</p><blockquote>Quote</blockquote>"
+                  placeholder="<h2>1. Core Principle</h2><p>Summary paragraph...</p><blockquote>Quote</blockquote> (Can be left empty if automated AI Cron is queued)"
                   value={formData.content}
                   onChange={(e) => setFormData({ ...formData, content: e.target.value })}
                   style={{ ...styles.modalTextarea, fontFamily: "monospace", fontSize: "0.85rem" }}
                 />
+              </div>
+
+              {/* Queue for AI Cron Checkbox */}
+              <div style={{ padding: "12px 14px", backgroundColor: "#0F172A", borderRadius: "8px", border: "1px solid #334155" }}>
+                <label style={{ display: "flex", alignItems: "center", gap: "10px", cursor: "pointer" }}>
+                  <input
+                    type="checkbox"
+                    checked={formData.needsContentGeneration}
+                    onChange={(e) => setFormData({ ...formData, needsContentGeneration: e.target.checked })}
+                    style={{ width: "18px", height: "18px", cursor: "pointer" }}
+                  />
+                  <div>
+                    <div style={{ color: "#F8FAFC", fontSize: "0.9rem", fontWeight: 600 }}>
+                      ⚡ Queue for Automated AI Content Generation (Cron Job)
+                    </div>
+                    <div style={{ color: "#94A3B8", fontSize: "0.78rem" }}>
+                      When checked, the Multi-Book AI cron scraper will automatically generate and populate this summary's HTML content.
+                    </div>
+                  </div>
+                </label>
               </div>
 
               <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", alignItems: "center" }}>

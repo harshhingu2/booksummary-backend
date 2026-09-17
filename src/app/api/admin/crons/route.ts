@@ -26,6 +26,45 @@ export async function GET() {
 
   try {
     await connectDB();
+    
+    // Auto-seed default jobs if database has missing core jobs
+    const defaultJobs = [
+      {
+        name: "YouTube Shorts Auto Ingestion",
+        schedule: "*/15 * * * *",
+        endpoint: "/api/cron/youtube",
+        isActive: true,
+      },
+      {
+        name: "Individual Books AI Content Ingestion",
+        schedule: "*/15 * * * *",
+        endpoint: "/api/cron/individual-content",
+        isActive: true,
+      },
+      {
+        name: "Multi-Book AI Content Ingestion",
+        schedule: "*/15 * * * *",
+        endpoint: "/api/cron/multibook-content",
+        isActive: true,
+      },
+    ];
+
+    let seededAny = false;
+    for (const d of defaultJobs) {
+      const exists = await CronJob.findOne({ endpoint: d.endpoint });
+      if (!exists) {
+        await CronJob.create({
+          ...d,
+          lastStatus: "never",
+        });
+        seededAny = true;
+      }
+    }
+
+    if (seededAny) {
+      await reloadCronSchedules();
+    }
+
     const crons = await CronJob.find().sort({ createdAt: -1 });
     const activeTasksCount = getActiveCronCount();
     const isInitialized = isCronManagerInitialized();

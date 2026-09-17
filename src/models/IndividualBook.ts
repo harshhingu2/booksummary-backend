@@ -17,6 +17,7 @@ export interface IIndividualBook extends Document {
   chapters?: IChapter[];
   isFeatured?: boolean;
   status: "ACTIVE" | "INACTIVE" | "PENDING";
+  needsContentGeneration?: boolean;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -42,6 +43,11 @@ const IndividualBookSchema = new Schema<IIndividualBook>(
       type: String,
       enum: ["ACTIVE", "INACTIVE", "PENDING"],
       default: "ACTIVE",
+      index: true,
+    },
+    needsContentGeneration: {
+      type: Boolean,
+      default: false,
       index: true,
     },
   },
