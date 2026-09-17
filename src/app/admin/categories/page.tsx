@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import ConfirmDeleteModal from "@/components/ConfirmDeleteModal";
 
 interface CategoryItem {
   _id: string;
@@ -32,6 +33,10 @@ export default function AdminCategoriesPage() {
   });
   const [saving, setSaving] = useState(false);
 
+  // Delete Confirmation State
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
+
   const fetchCategories = async () => {
     try {
       setLoading(true);
@@ -58,7 +63,13 @@ export default function AdminCategoriesPage() {
 
   const handleOpenAddModal = () => {
     setEditingId(null);
-    setFormData({ name: "", description: "", type: "all", isActive: true, sortOrder: categories.length });
+    setFormData({
+      name: "",
+      description: "",
+      type: "all",
+      isActive: true,
+      sortOrder: categories.length,
+    });
     setShowModal(true);
   };
 
@@ -104,17 +115,27 @@ export default function AdminCategoriesPage() {
     }
   };
 
-  const handleDelete = async (id: string, name: string) => {
-    if (!confirm(`Are you sure you want to delete category '${name}'?`)) return;
+  const handlePromptDelete = (id: string, name: string) => {
+    setDeleteTarget({ id, name });
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
     try {
-      const res = await fetch(`/api/admin/categories/${id}`, { method: "DELETE" });
+      setIsDeleting(true);
+      const res = await fetch(`/api/admin/categories/${deleteTarget.id}`, { method: "DELETE" });
       const data = await res.json();
       if (data.success) {
-        setMessage({ text: data.message, type: "success" });
+        setMessage({ text: `Category "${deleteTarget.name}" deleted successfully`, type: "success" });
+        setDeleteTarget(null);
         fetchCategories();
+      } else {
+        setMessage({ text: data.error || "Failed to delete category", type: "error" });
       }
     } catch (err: any) {
-      alert("Error deleting category: " + err.message);
+      setMessage({ text: err.message || "Error deleting category", type: "error" });
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -239,7 +260,7 @@ export default function AdminCategoriesPage() {
                       <button onClick={() => handleOpenEditModal(cat)} style={styles.editBtn}>
                         Edit
                       </button>
-                      <button onClick={() => handleDelete(cat._id, cat.name)} style={styles.deleteBtn}>
+                      <button onClick={() => handlePromptDelete(cat._id, cat.name)} style={styles.deleteBtn}>
                         Delete
                       </button>
                     </div>
@@ -336,6 +357,16 @@ export default function AdminCategoriesPage() {
           </div>
         </div>
       )}
+
+      {/* Confirm Delete Alert Modal */}
+      <ConfirmDeleteModal
+        isOpen={!!deleteTarget}
+        itemName={deleteTarget?.name}
+        title="Delete Category"
+        isDeleting={isDeleting}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

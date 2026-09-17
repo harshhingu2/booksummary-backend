@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import ConfirmDeleteModal from "@/components/ConfirmDeleteModal";
 
 export type RoleType = "ADMIN" | "EDITOR" | "USER";
 
@@ -29,6 +30,10 @@ export default function AdminUsersPage() {
     role: "USER" as RoleType,
   });
   const [creating, setCreating] = useState(false);
+
+  // Delete Confirmation State
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const fetchUsers = async () => {
     try {
@@ -114,18 +119,29 @@ export default function AdminUsersPage() {
     }
   };
 
-  const handleDeleteUser = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this user?")) return;
+  const handlePromptDelete = (id: string, name: string) => {
+    setDeleteTarget({ id, name });
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
     try {
-      const res = await fetch(`/api/admin/users/${id}`, {
+      setIsDeleting(true);
+      const res = await fetch(`/api/admin/users/${deleteTarget.id}`, {
         method: "DELETE",
       });
       const data = await res.json();
       if (data.success) {
+        setMessage({ text: `User "${deleteTarget.name}" deleted successfully`, type: "success" });
+        setDeleteTarget(null);
         fetchUsers();
+      } else {
+        setMessage({ text: data.error || "Failed to delete user", type: "error" });
       }
-    } catch (err) {
-      console.error("Error deleting user:", err);
+    } catch (err: any) {
+      setMessage({ text: err.message || "Error deleting user", type: "error" });
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -241,7 +257,7 @@ export default function AdminUsersPage() {
                   <td style={styles.td}>{new Date(u.createdAt).toLocaleDateString()}</td>
                   <td style={styles.tdActions}>
                     <button
-                      onClick={() => handleDeleteUser(u._id)}
+                      onClick={() => handlePromptDelete(u._id, u.name)}
                       style={styles.deleteButton}
                       title="Delete User"
                     >
@@ -323,6 +339,16 @@ export default function AdminUsersPage() {
           </div>
         </div>
       )}
+
+      {/* Confirm Delete Alert Modal */}
+      <ConfirmDeleteModal
+        isOpen={!!deleteTarget}
+        itemName={deleteTarget?.name}
+        title="Delete User Account"
+        isDeleting={isDeleting}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

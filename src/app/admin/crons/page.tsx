@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import ConfirmDeleteModal from "@/components/ConfirmDeleteModal";
 
 interface CronItem {
   _id: string;
@@ -46,6 +47,10 @@ export default function AdminCronsPage() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [runningId, setRunningId] = useState<string | null>(null);
   const [selectedResult, setSelectedResult] = useState<string | null>(null);
+
+  // Delete Confirmation State
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const [frequencyChoice, setFrequencyChoice] = useState("*/15 * * * *");
   const [customCron, setCustomCron] = useState("*/15 * * * *");
@@ -194,16 +199,29 @@ export default function AdminCronsPage() {
     }
   };
 
-  const handleDeleteCron = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this cron job?")) return;
+  const handlePromptDelete = (id: string, name: string) => {
+    setDeleteTarget({ id, name });
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
     try {
-      const res = await fetch(`/api/admin/crons/${id}`, {
+      setIsDeleting(true);
+      const res = await fetch(`/api/admin/crons/${deleteTarget.id}`, {
         method: "DELETE",
       });
       const data = await res.json();
-      if (data.success) fetchCrons();
-    } catch (err) {
-      console.error("Failed to delete cron job:", err);
+      if (data.success) {
+        setMessage({ text: `Cron job "${deleteTarget.name}" deleted successfully`, type: "success" });
+        setDeleteTarget(null);
+        fetchCrons();
+      } else {
+        setMessage({ text: data.error || "Failed to delete cron job", type: "error" });
+      }
+    } catch (err: any) {
+      setMessage({ text: err.message || "Error deleting cron job", type: "error" });
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -377,7 +395,7 @@ export default function AdminCronsPage() {
                     <button onClick={() => handleOpenEditModal(job)} style={styles.editButton}>
                       ✏️ Edit
                     </button>
-                    <button onClick={() => handleDeleteCron(job._id)} style={styles.deleteButton}>
+                    <button onClick={() => handlePromptDelete(job._id, job.name)} style={styles.deleteButton} title="Delete Cron Job">
                       🗑️
                     </button>
                   </td>
@@ -514,6 +532,16 @@ export default function AdminCronsPage() {
           </div>
         </div>
       )}
+
+      {/* Confirm Delete Alert Modal */}
+      <ConfirmDeleteModal
+        isOpen={!!deleteTarget}
+        itemName={deleteTarget?.name}
+        title="Delete Cron Job"
+        isDeleting={isDeleting}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import ConfirmDeleteModal from "@/components/ConfirmDeleteModal";
 
 interface ShortItem {
   _id: string;
@@ -36,6 +37,16 @@ export default function AdminShortsModerationPage() {
   const [bulkCategory, setBulkCategory] = useState("Random");
 
   const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
+
+  // Delete Confirmation State
+  const [deleteTarget, setDeleteTarget] = useState<{
+    id?: string;
+    title?: string;
+    isBulk?: boolean;
+    bulkCount?: number;
+    bulkAction?: string;
+  } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Add Short Form State
   const [showAddForm, setShowAddForm] = useState(false);
@@ -176,22 +187,14 @@ export default function AdminShortsModerationPage() {
     if (selectedIds.length === 0) return;
 
     const count = selectedIds.length;
-    let confirmMsg = "";
-
-    if (action === "approve") {
-      confirmMsg = `Are you sure you want to APPROVE ${count} selected short(s)?`;
-    } else if (action === "reject") {
-      confirmMsg = `Are you sure you want to REJECT ${count} selected short(s)?`;
-    } else if (action === "pending") {
-      confirmMsg = `Are you sure you want to set status to PENDING for ${count} selected short(s)?`;
-    } else if (action === "delete") {
-      confirmMsg = `Are you sure you want to DELETE ${count} selected short(s)? This action cannot be undone.`;
-    } else if (action === "change_category") {
-      const catName = targetCategory || bulkCategory;
-      confirmMsg = `Are you sure you want to set the category of ${count} selected short(s) to '${catName}'?`;
+    if (action === "delete") {
+      setDeleteTarget({
+        isBulk: true,
+        bulkCount: count,
+        bulkAction: action,
+      });
+      return;
     }
-
-    if (!confirm(confirmMsg)) return;
 
     try {
       setMessage(null);
@@ -247,16 +250,49 @@ export default function AdminShortsModerationPage() {
     }
   };
 
-  const handleDeleteSingle = async (id: string) => {
-    if (!confirm("Are you sure you want to delete this short?")) return;
+  const handlePromptDeleteSingle = (id: string, title: string) => {
+    setDeleteTarget({ id, title, isBulk: false });
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
     try {
-      const res = await fetch(`/api/admin/youtube/shorts/${id}`, {
-        method: "DELETE",
-      });
-      const data = await res.json();
-      if (data.success) fetchShortsAndCategories();
-    } catch (err) {
-      console.error("Failed to delete short:", err);
+      setIsDeleting(true);
+      if (deleteTarget.isBulk) {
+        const res = await fetch("/api/admin/youtube/shorts/bulk", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            ids: selectedIds,
+            action: "delete",
+          }),
+        });
+        const data = await res.json();
+        if (data.success) {
+          setMessage({ text: data.message, type: "success" });
+          setSelectedIds([]);
+          setDeleteTarget(null);
+          fetchShortsAndCategories();
+        } else {
+          setMessage({ text: data.error || "Bulk deletion failed", type: "error" });
+        }
+      } else if (deleteTarget.id) {
+        const res = await fetch(`/api/admin/youtube/shorts/${deleteTarget.id}`, {
+          method: "DELETE",
+        });
+        const data = await res.json();
+        if (data.success) {
+          setMessage({ text: "Short deleted successfully", type: "success" });
+          setDeleteTarget(null);
+          fetchShortsAndCategories();
+        } else {
+          setMessage({ text: data.error || "Failed to delete short", type: "error" });
+        }
+      }
+    } catch (err: any) {
+      setMessage({ text: err.message || "Error deleting short", type: "error" });
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -587,8 +623,9 @@ export default function AdminShortsModerationPage() {
                         </button>
                       )}
                       <button
-                        onClick={() => handleDeleteSingle(item._id)}
+                        onClick={() => handlePromptDeleteSingle(item._id, item.title)}
                         style={styles.deleteButton}
+                        title="Delete Short"
                       >
                         🗑️
                       </button>
@@ -600,6 +637,23 @@ export default function AdminShortsModerationPage() {
           </div>
         </div>
       )}
+
+      {/* Confirm Delete Alert Modal */}
+      <ConfirmDeleteModal
+        isOpen={!!deleteTarget}
+        title={deleteTarget?.isBulk ? "Confirm Bulk Deletion" : "Delete YouTube Short"}
+        itemName={deleteTarget?.isBulk ? `${deleteTarget.bulkCount} selected short(s)` : deleteTarget?.title}
+        message={
+          deleteTarget?.isBulk
+            ? `Are you sure you want to permanently delete all ${deleteTarget.bulkCount} selected shorts? This action cannot be undone.`
+            : deleteTarget?.title
+            ? `Are you sure you want to delete short "${deleteTarget.title}"?`
+            : undefined
+        }
+        isDeleting={isDeleting}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

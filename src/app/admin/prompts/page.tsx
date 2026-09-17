@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import ConfirmDeleteModal from "@/components/ConfirmDeleteModal";
 
 interface PromptItem {
   _id: string;
@@ -34,6 +35,10 @@ export default function AdminPromptsPage() {
   });
   const [saving, setSaving] = useState(false);
   const [viewingContent, setViewingContent] = useState<PromptItem | null>(null);
+
+  // Delete Confirmation State
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const fetchPrompts = async () => {
     try {
@@ -116,20 +121,27 @@ export default function AdminPromptsPage() {
     }
   };
 
-  const handleDeletePrompt = async (id: string, name: string) => {
-    if (!confirm(`Are you sure you want to delete the prompt "${name}"?`)) return;
+  const handlePromptDelete = (id: string, name: string) => {
+    setDeleteTarget({ id, name });
+  };
 
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
     try {
-      const res = await fetch(`/api/admin/prompts/${id}`, { method: "DELETE" });
+      setIsDeleting(true);
+      const res = await fetch(`/api/admin/prompts/${deleteTarget.id}`, { method: "DELETE" });
       const data = await res.json();
       if (data.success) {
-        setMessage({ text: `Prompt "${name}" deleted.`, type: "success" });
+        setMessage({ text: `Prompt "${deleteTarget.name}" deleted.`, type: "success" });
+        setDeleteTarget(null);
         fetchPrompts();
       } else {
         setMessage({ text: data.error || "Failed to delete prompt", type: "error" });
       }
     } catch (err: any) {
       setMessage({ text: err.message || "Error deleting prompt", type: "error" });
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -307,7 +319,7 @@ export default function AdminPromptsPage() {
                     ✏️
                   </button>
                   <button
-                    onClick={() => handleDeletePrompt(prompt._id, prompt.name)}
+                    onClick={() => handlePromptDelete(prompt._id, prompt.name)}
                     style={styles.actionIconButton}
                     title="Delete Prompt"
                   >
@@ -569,6 +581,16 @@ export default function AdminPromptsPage() {
           </div>
         </div>
       )}
+
+      {/* Confirm Delete Alert Modal */}
+      <ConfirmDeleteModal
+        isOpen={!!deleteTarget}
+        itemName={deleteTarget?.name}
+        title="Delete Prompt Template"
+        isDeleting={isDeleting}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

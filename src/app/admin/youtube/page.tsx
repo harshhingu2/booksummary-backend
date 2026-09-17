@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import ConfirmDeleteModal from "@/components/ConfirmDeleteModal";
 
 interface ChannelItem {
   _id: string;
@@ -34,6 +35,10 @@ export default function AdminYouTubeChannelsPage() {
   const [editFeedUrl, setEditFeedUrl] = useState("");
   const [editIsActive, setEditIsActive] = useState(true);
   const [savingEdit, setSavingEdit] = useState(false);
+
+  // Delete Confirmation State
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const fetchChannels = async () => {
     try {
@@ -192,16 +197,29 @@ export default function AdminYouTubeChannelsPage() {
     }
   };
 
-  const handleDeleteChannel = async (id: string) => {
-    if (!confirm("Are you sure you want to remove this channel?")) return;
+  const handlePromptDelete = (id: string, name: string) => {
+    setDeleteTarget({ id, name });
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
     try {
-      const res = await fetch(`/api/admin/youtube/channels/${id}`, {
+      setIsDeleting(true);
+      const res = await fetch(`/api/admin/youtube/channels/${deleteTarget.id}`, {
         method: "DELETE",
       });
       const data = await res.json();
-      if (data.success) fetchChannels();
-    } catch (err) {
-      console.error("Failed to delete channel:", err);
+      if (data.success) {
+        setMessage({ text: `Channel "${deleteTarget.name}" removed successfully`, type: "success" });
+        setDeleteTarget(null);
+        fetchChannels();
+      } else {
+        setMessage({ text: data.error || "Failed to remove channel", type: "error" });
+      }
+    } catch (err: any) {
+      setMessage({ text: err.message || "Error deleting channel", type: "error" });
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -344,7 +362,7 @@ export default function AdminYouTubeChannelsPage() {
                       <button onClick={() => handleOpenEdit(ch)} style={styles.editButton}>
                         ✏️ Edit
                       </button>
-                      <button onClick={() => handleDeleteChannel(ch._id)} style={styles.deleteButton}>
+                      <button onClick={() => handlePromptDelete(ch._id, ch.channelName)} style={styles.deleteButton}>
                         🗑️ Remove
                       </button>
                     </div>
@@ -450,6 +468,17 @@ export default function AdminYouTubeChannelsPage() {
           </div>
         </div>
       )}
+
+      {/* Confirm Delete Alert Modal */}
+      <ConfirmDeleteModal
+        isOpen={!!deleteTarget}
+        itemName={deleteTarget?.name}
+        title="Remove YouTube Channel"
+        message={deleteTarget ? `Are you sure you want to remove channel "${deleteTarget.name}"? Ingested shorts will remain, but automatic sync will stop.` : undefined}
+        isDeleting={isDeleting}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }

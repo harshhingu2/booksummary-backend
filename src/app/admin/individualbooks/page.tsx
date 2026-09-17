@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
+import ConfirmDeleteModal from "@/components/ConfirmDeleteModal";
 
 interface Chapter {
   chapterNumber: number;
@@ -37,6 +38,10 @@ export default function AdminIndividualBooksPage() {
   const [saving, setSaving] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [uploadingAudio, setUploadingAudio] = useState(false);
+
+  // Delete Confirmation State
+  const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   // Form State
   const [formData, setFormData] = useState({
@@ -395,19 +400,29 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
     }
   };
 
-  const handleDeleteBook = async (id: string, title: string) => {
-    if (!confirm(`Are you sure you want to delete '${title}'?`)) return;
+  const handlePromptDelete = (id: string, title: string) => {
+    setDeleteTarget({ id, title });
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
     try {
-      const res = await fetch(`/api/admin/individualbooks/${id}`, {
+      setIsDeleting(true);
+      const res = await fetch(`/api/admin/individualbooks/${deleteTarget.id}`, {
         method: "DELETE",
       });
       const data = await res.json();
       if (data.success) {
-        setMessage({ text: "Book deleted successfully", type: "success" });
+        setMessage({ text: `"${deleteTarget.title}" deleted successfully`, type: "success" });
+        setDeleteTarget(null);
         fetchBooks();
+      } else {
+        setMessage({ text: data.error || "Failed to delete book", type: "error" });
       }
-    } catch (err) {
-      console.error("Error deleting individual book:", err);
+    } catch (err: any) {
+      setMessage({ text: err.message || "Error deleting individual book", type: "error" });
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -635,7 +650,7 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
                         <button onClick={() => handleOpenEditModal(book)} style={styles.editBtn}>
                           Edit
                         </button>
-                        <button onClick={() => handleDeleteBook(book._id, book.title)} style={styles.deleteBtn}>
+                        <button onClick={() => handlePromptDelete(book._id, book.title)} style={styles.deleteBtn}>
                           Delete
                         </button>
                       </div>
@@ -991,6 +1006,16 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
           </div>
         </div>
       )}
+
+      {/* Confirm Delete Alert Modal */}
+      <ConfirmDeleteModal
+        isOpen={!!deleteTarget}
+        itemName={deleteTarget?.title}
+        title="Delete Individual Book"
+        isDeleting={isDeleting}
+        onConfirm={handleConfirmDelete}
+        onCancel={() => setDeleteTarget(null)}
+      />
     </div>
   );
 }
