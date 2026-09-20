@@ -191,6 +191,112 @@ async function ensureAdminAndInitialData() {
       console.error("[Auto-Init] Failed to ensure default prompts:", promptErr);
     }
 
+    // 5. Ensure pendingContent and contentStatus exist on all existing books
+    try {
+      const { BookSummary } = await import("@/models/Book");
+      const { IndividualBook } = await import("@/models/IndividualBook");
+
+      // For BookSummary (Multi-Book / Top Combine): set APPROVED if content exists and contentStatus is not yet set
+      await BookSummary.updateMany(
+        {
+          $or: [
+            { contentStatus: { $exists: false } },
+            { contentStatus: null },
+            { contentStatus: "" },
+          ],
+          content: { $exists: true, $ne: "" },
+        } as any,
+        {
+          $set: {
+            contentStatus: "APPROVED",
+            pendingContent: "",
+          },
+        }
+      );
+
+      await BookSummary.updateMany(
+        {
+          $or: [
+            { contentStatus: { $exists: false } },
+            { contentStatus: null },
+            { contentStatus: "" },
+          ],
+        } as any,
+        {
+          $set: {
+            contentStatus: "DRAFT",
+            pendingContent: "",
+          },
+        }
+      );
+
+      await BookSummary.updateMany(
+        {
+          $or: [
+            { pendingContent: { $exists: false } },
+            { pendingContent: null },
+          ],
+        } as any,
+        {
+          $set: {
+            pendingContent: "",
+          },
+        }
+      );
+
+      // For IndividualBook: set APPROVED if content exists and contentStatus is not yet set
+      await IndividualBook.updateMany(
+        {
+          $or: [
+            { contentStatus: { $exists: false } },
+            { contentStatus: null },
+            { contentStatus: "" },
+          ],
+          content: { $exists: true, $ne: "" },
+        } as any,
+        {
+          $set: {
+            contentStatus: "APPROVED",
+            pendingContent: "",
+          },
+        }
+      );
+
+      await IndividualBook.updateMany(
+        {
+          $or: [
+            { contentStatus: { $exists: false } },
+            { contentStatus: null },
+            { contentStatus: "" },
+          ],
+        } as any,
+        {
+          $set: {
+            contentStatus: "DRAFT",
+            pendingContent: "",
+          },
+        }
+      );
+
+      await IndividualBook.updateMany(
+        {
+          $or: [
+            { pendingContent: { $exists: false } },
+            { pendingContent: null },
+          ],
+        } as any,
+        {
+          $set: {
+            pendingContent: "",
+          },
+        }
+      );
+
+      console.log("[Auto-Init] Ensured pendingContent and contentStatus on all existing books.");
+    } catch (fieldErr) {
+      console.error("[Auto-Init] Failed to ensure contentStatus fields:", fieldErr);
+    }
+
     globalForDb.adminEnsured = true;
   } catch (err) {
     console.error("[Auto-Init] Failed to ensure initial data:", err);

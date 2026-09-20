@@ -28,6 +28,7 @@ export async function GET(request: NextRequest) {
     const search = searchParams.get("search") || "";
     const topic = searchParams.get("topic") || "";
     const status = searchParams.get("status") || "";
+    const contentStatus = searchParams.get("contentStatus") || "";
 
     const query: any = {};
     if (search) {
@@ -41,6 +42,9 @@ export async function GET(request: NextRequest) {
     }
     if (status && status !== "ALL") {
       query.status = status;
+    }
+    if (contentStatus && contentStatus !== "ALL") {
+      query.contentStatus = contentStatus;
     }
 
     const books = await BookSummary.find(query).sort({ createdAt: -1 });

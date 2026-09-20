@@ -119,14 +119,22 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
     if (type === "individual") {
       updatedDoc = await IndividualBook.findByIdAndUpdate(
         id,
-        { content: generatedContent },
+        {
+          pendingContent: generatedContent,
+          contentStatus: "PENDING_REVIEW",
+          needsContentGeneration: false,
+        },
         { new: true }
       );
     } else {
       // Top Combine summary
       updatedDoc = await BookSummary.findByIdAndUpdate(
         id,
-        { content: generatedContent },
+        {
+          pendingContent: generatedContent,
+          contentStatus: "PENDING_REVIEW",
+          needsContentGeneration: false,
+        },
         { new: true }
       );
     }
@@ -138,12 +146,13 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
       );
     }
 
-    console.log(`[AI Generation] Successfully updated content for "${title}" in DB!`);
+    console.log(`[AI Generation] Successfully saved pending content for "${title}" in DB!`);
 
     return NextResponse.json({
       success: true,
-      message: `Summary content generated and saved to DB for "${title}"!`,
-      content: generatedContent,
+      message: `Summary content generated and saved to pendingContent (awaiting review) for "${title}"!`,
+      pendingContent: generatedContent,
+      contentStatus: "PENDING_REVIEW",
       updatedAt: updatedDoc.updatedAt,
     });
   } catch (error: any) {

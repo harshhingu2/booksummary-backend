@@ -17,6 +17,8 @@ interface BookItem {
   readingTimeMinutes: number;
   shortDescription?: string;
   content: string;
+  pendingContent?: string;
+  contentStatus?: "DRAFT" | "PENDING_REVIEW" | "APPROVED" | "REJECTED";
   chapters?: Chapter[];
   isTopCombine: boolean;
   status: "ACTIVE" | "INACTIVE" | "PENDING";
@@ -29,6 +31,7 @@ export default function AdminBooksPage() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
+  const [contentStatusFilter, setContentStatusFilter] = useState("ALL");
   const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
 
   // Modal State for Add & Edit
@@ -37,6 +40,13 @@ export default function AdminBooksPage() {
   const [saving, setSaving] = useState(false);
   const [uploadingImage, setUploadingImage] = useState(false);
   const [uploadingAudio, setUploadingAudio] = useState(false);
+
+  // Review Draft Modal State
+  const [reviewModalOpen, setReviewModalOpen] = useState(false);
+  const [reviewBook, setReviewBook] = useState<BookItem | null>(null);
+  const [reviewDraftText, setReviewDraftText] = useState("");
+  const [reviewTab, setReviewTab] = useState<"pending" | "preview" | "current">("preview");
+  const [reviewActionLoading, setReviewActionLoading] = useState(false);
 
   // Delete Confirmation State
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
@@ -50,6 +60,8 @@ export default function AdminBooksPage() {
     audioUrl: "",
     readingTimeMinutes: 10,
     content: "",
+    pendingContent: "",
+    contentStatus: "DRAFT" as "DRAFT" | "PENDING_REVIEW" | "APPROVED" | "REJECTED",
     isTopCombine: true,
     status: "PENDING" as "ACTIVE" | "INACTIVE" | "PENDING",
     needsContentGeneration: false,
@@ -61,6 +73,7 @@ export default function AdminBooksPage() {
       const params = new URLSearchParams();
       if (search) params.append("search", search);
       if (statusFilter && statusFilter !== "ALL") params.append("status", statusFilter);
+      if (contentStatusFilter && contentStatusFilter !== "ALL") params.append("contentStatus", contentStatusFilter);
 
       const res = await fetch(`/api/admin/books?${params.toString()}`, { cache: "no-store" });
       const data = await res.json();
@@ -76,7 +89,7 @@ export default function AdminBooksPage() {
 
   useEffect(() => {
     fetchBooks();
-  }, [search, statusFilter]);
+  }, [search, statusFilter, contentStatusFilter]);
 
   const handleOpenAddModal = () => {
     setEditingId(null);
@@ -87,6 +100,8 @@ export default function AdminBooksPage() {
       audioUrl: "",
       readingTimeMinutes: 10,
       content: "",
+      pendingContent: "",
+      contentStatus: "DRAFT",
       isTopCombine: true,
       status: "PENDING",
       needsContentGeneration: true, // Default to true when adding so cron picks it up
@@ -103,11 +118,97 @@ export default function AdminBooksPage() {
       audioUrl: b.audioUrl || "",
       readingTimeMinutes: b.readingTimeMinutes || 10,
       content: b.content || "",
+      pendingContent: b.pendingContent || "",
+      contentStatus: b.contentStatus || (b.content ? "APPROVED" : "DRAFT"),
       isTopCombine: !!b.isTopCombine,
       status: (b.status || "ACTIVE") as "ACTIVE" | "INACTIVE" | "PENDING",
       needsContentGeneration: !!b.needsContentGeneration,
     });
     setShowModal(true);
+  };
+
+  const handleOpenReviewModal = (b: BookItem) => {
+    setReviewBook(b);
+    setReviewDraftText(b.pendingContent || "");
+    setReviewTab(b.pendingContent ? "preview" : "current");
+    setReviewModalOpen(true);
+  };
+
+  const handleApproveDraft = async (bookId: string, customContent?: string) => {
+    const targetContent = customContent !== undefined ? customContent : reviewDraftText;
+    try {
+      setReviewActionLoading(true);
+      const res = await fetch(`/api/admin/books/${bookId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          content: targetContent,
+          contentStatus: "APPROVED",
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setMessage({ text: "Content approved and published to live summary!", type: "success" });
+        setReviewModalOpen(false);
+        fetchBooks();
+      } else {
+        setMessage({ text: data.error || "Failed to approve content", type: "error" });
+      }
+    } catch (err: any) {
+      setMessage({ text: err.message || "Failed to approve content", type: "error" });
+    } finally {
+      setReviewActionLoading(false);
+    }
+  };
+
+  const handleRejectDraft = async (bookId: string) => {
+    try {
+      setReviewActionLoading(true);
+      const res = await fetch(`/api/admin/books/${bookId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          contentStatus: "REJECTED",
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setMessage({ text: "Draft marked as REJECTED.", type: "success" });
+        setReviewModalOpen(false);
+        fetchBooks();
+      } else {
+        setMessage({ text: data.error || "Failed to reject draft", type: "error" });
+      }
+    } catch (err: any) {
+      setMessage({ text: err.message || "Failed to reject draft", type: "error" });
+    } finally {
+      setReviewActionLoading(false);
+    }
+  };
+
+  const handleSaveDraftOnly = async (bookId: string) => {
+    try {
+      setReviewActionLoading(true);
+      const res = await fetch(`/api/admin/books/${bookId}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          pendingContent: reviewDraftText,
+          contentStatus: "PENDING_REVIEW",
+        }),
+      });
+      const data = await res.json();
+      if (data.success) {
+        setMessage({ text: "Draft changes saved to pendingContent.", type: "success" });
+        fetchBooks();
+      } else {
+        setMessage({ text: data.error || "Failed to save draft changes", type: "error" });
+      }
+    } catch (err: any) {
+      setMessage({ text: err.message || "Failed to save draft changes", type: "error" });
+    } finally {
+      setReviewActionLoading(false);
+    }
   };
 
   // Upload Cover Image to Cloudflare R2
@@ -187,6 +288,8 @@ export default function AdminBooksPage() {
         audioUrl: formData.audioUrl,
         readingTimeMinutes: Number(formData.readingTimeMinutes) || 10,
         content: formData.content,
+        pendingContent: formData.pendingContent,
+        contentStatus: formData.contentStatus || "DRAFT",
         isTopCombine: formData.isTopCombine,
         status: formData.status || "ACTIVE",
         needsContentGeneration: formData.needsContentGeneration,
@@ -362,7 +465,7 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
 
       const data = await res.json();
       if (data.success) {
-        setMessage({ text: `AI content generated via ${providerLabel} and saved to DB for "${book.title}"!`, type: "success" });
+        setMessage({ text: `AI content generated via ${providerLabel} and saved to pendingContent (awaiting review) for "${book.title}"!`, type: "success" });
         fetchBooks();
       } else {
         setMessage({ text: data.error || "Failed to generate AI content", type: "error" });
@@ -422,7 +525,7 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
         <div>
           <h1 style={styles.title}>Top Combine Summaries Library</h1>
           <p style={styles.subtitle}>
-            Manage combined topic summaries, rich HTML content, and Cloudflare R2 covers & audiobooks
+            Manage combined topic summaries, pending AI drafts & review workflow, and Cloudflare R2 covers & audiobooks
           </p>
         </div>
         <button onClick={handleOpenAddModal} style={styles.primaryBtn}>
@@ -467,10 +570,35 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
                 outline: "none",
               }}
             >
-              <option value="ALL">All Statuses</option>
+              <option value="ALL">All Publication Statuses</option>
               <option value="ACTIVE">🟢 Active</option>
               <option value="PENDING">🟡 Pending</option>
               <option value="INACTIVE">🔴 Inactive</option>
+            </select>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <label style={{ color: "#94A3B8", fontSize: "0.85rem", fontWeight: 600 }}>AI Content Review:</label>
+            <select
+              value={contentStatusFilter}
+              onChange={(e) => setContentStatusFilter(e.target.value)}
+              style={{
+                padding: "8px 12px",
+                backgroundColor: "#1E293B",
+                border: "1px solid #334155",
+                borderRadius: "6px",
+                color: "#F8FAFC",
+                fontSize: "0.85rem",
+                fontWeight: 600,
+                cursor: "pointer",
+                outline: "none",
+              }}
+            >
+              <option value="ALL">All Content Statuses</option>
+              <option value="PENDING_REVIEW">🟡 Pending Review</option>
+              <option value="APPROVED">🟢 Approved</option>
+              <option value="REJECTED">🔴 Rejected</option>
+              <option value="DRAFT">⚪ Draft</option>
             </select>
           </div>
 
@@ -513,7 +641,8 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
                 <th style={styles.th}>Topic</th>
                 <th style={styles.th}>Read Time</th>
                 <th style={styles.th}>Audiobook</th>
-                <th style={styles.th}>Status</th>
+                <th style={styles.th}>Pub Status</th>
+                <th style={styles.th}>AI Content Status</th>
                 <th style={styles.th}>AI Cron Queue</th>
                 <th style={styles.th}>Top Combine</th>
                 <th style={styles.th}>Actions</th>
@@ -522,8 +651,10 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
             <tbody>
               {books.map((b) => {
                 const bookStatus = b.status || "ACTIVE";
+                const contentStatus = b.contentStatus || (b.content ? "APPROVED" : "DRAFT");
                 const isQueued = !!b.needsContentGeneration;
-                const hasContent = !!(b.content && b.content.trim().length > 50);
+                const hasPending = !!(b.pendingContent && b.pendingContent.trim().length > 0);
+                const hasLiveContent = !!(b.content && b.content.trim().length > 50);
 
                 return (
                   <tr key={b._id} style={styles.tr}>
@@ -540,6 +671,11 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
                         )}
                         <div>
                           <div style={{ fontWeight: 600, color: "#F8FAFC" }}>{b.title}</div>
+                          {hasPending && (
+                            <span style={{ fontSize: "0.72rem", color: "#F59E0B", fontWeight: 600 }}>
+                              ⚡ AI Draft Available ({b.pendingContent!.length} chars)
+                            </span>
+                          )}
                         </div>
                       </div>
                     </td>
@@ -598,6 +734,73 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
                         <option value="INACTIVE" style={{ backgroundColor: "#1E293B", color: "#F87171" }}>INACTIVE</option>
                       </select>
                     </td>
+
+                    {/* Content Status & Quick Review Trigger */}
+                    <td style={styles.td}>
+                      <div style={{ display: "flex", flexDirection: "column", gap: "4px" }}>
+                        <span
+                          style={{
+                            display: "inline-block",
+                            padding: "3px 8px",
+                            borderRadius: "12px",
+                            fontSize: "0.72rem",
+                            fontWeight: 700,
+                            width: "fit-content",
+                            backgroundColor:
+                              contentStatus === "PENDING_REVIEW"
+                                ? "rgba(245, 158, 11, 0.2)"
+                                : contentStatus === "APPROVED"
+                                ? "rgba(16, 185, 129, 0.2)"
+                                : contentStatus === "REJECTED"
+                                ? "rgba(239, 68, 68, 0.2)"
+                                : "rgba(148, 163, 184, 0.15)",
+                            color:
+                              contentStatus === "PENDING_REVIEW"
+                                ? "#FBBF24"
+                                : contentStatus === "APPROVED"
+                                ? "#34D399"
+                                : contentStatus === "REJECTED"
+                                ? "#F87171"
+                                : "#94A3B8",
+                            border:
+                              contentStatus === "PENDING_REVIEW"
+                                ? "1px solid rgba(245, 158, 11, 0.4)"
+                                : contentStatus === "APPROVED"
+                                ? "1px solid rgba(16, 185, 129, 0.4)"
+                                : contentStatus === "REJECTED"
+                                ? "1px solid rgba(239, 68, 68, 0.4)"
+                                : "1px solid rgba(148, 163, 184, 0.2)",
+                          }}
+                        >
+                          {contentStatus === "PENDING_REVIEW"
+                            ? "🟡 Pending Review"
+                            : contentStatus === "APPROVED"
+                            ? "🟢 Approved"
+                            : contentStatus === "REJECTED"
+                            ? "🔴 Rejected"
+                            : "⚪ Draft"}
+                        </span>
+                        {hasPending && (
+                          <button
+                            onClick={() => handleOpenReviewModal(b)}
+                            style={{
+                              padding: "2px 6px",
+                              backgroundColor: "#D97706",
+                              color: "#FFFFFF",
+                              border: "none",
+                              borderRadius: "4px",
+                              fontSize: "0.7rem",
+                              fontWeight: 700,
+                              cursor: "pointer",
+                              width: "fit-content",
+                            }}
+                          >
+                            👁️ Review AI Draft
+                          </button>
+                        )}
+                      </div>
+                    </td>
+
                     <td style={styles.td}>
                       <label style={{ display: "inline-flex", alignItems: "center", gap: "6px", cursor: "pointer", padding: "4px 8px", backgroundColor: isQueued ? "rgba(99, 102, 241, 0.2)" : "rgba(255,255,255,0.03)", borderRadius: "6px", border: isQueued ? "1px solid #6366F1" : "1px solid rgba(255,255,255,0.1)" }}>
                         <input
@@ -607,7 +810,7 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
                           style={{ cursor: "pointer" }}
                         />
                         <span style={{ fontSize: "0.75rem", fontWeight: 600, color: isQueued ? "#A5B4FC" : "#94A3B8" }}>
-                          {isQueued ? "⚡ Auto-Cron" : hasContent ? "✅ Ready" : "⬜ Empty"}
+                          {isQueued ? "⚡ Auto-Cron" : hasLiveContent ? "✅ Ready" : "⬜ Empty"}
                         </span>
                       </label>
                     </td>
@@ -623,7 +826,7 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
                       </button>
                     </td>
                     <td style={styles.td}>
-                      <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                      <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
                         <button
                           onClick={() => handleOpenAiModal(b)}
                           disabled={generatingId === b._id}
@@ -652,6 +855,237 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
         )}
       </div>
 
+      {/* Review AI Draft Modal */}
+      {reviewModalOpen && reviewBook && (
+        <div style={styles.modalBackdrop}>
+          <div style={{ ...styles.modalContent, maxWidth: "920px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px", borderBottom: "1px solid #334155", paddingBottom: "12px" }}>
+              <div>
+                <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                  <h2 style={{ ...styles.modalTitle, margin: 0, fontSize: "1.25rem" }}>
+                    🔍 Review AI Generated Content
+                  </h2>
+                  <span
+                    style={{
+                      padding: "3px 8px",
+                      borderRadius: "12px",
+                      fontSize: "0.75rem",
+                      fontWeight: 700,
+                      backgroundColor:
+                        reviewBook.contentStatus === "APPROVED"
+                          ? "rgba(16, 185, 129, 0.2)"
+                          : reviewBook.contentStatus === "REJECTED"
+                          ? "rgba(239, 68, 68, 0.2)"
+                          : "rgba(245, 158, 11, 0.2)",
+                      color:
+                        reviewBook.contentStatus === "APPROVED"
+                          ? "#34D399"
+                          : reviewBook.contentStatus === "REJECTED"
+                          ? "#F87171"
+                          : "#FBBF24",
+                    }}
+                  >
+                    Status: {reviewBook.contentStatus || "PENDING_REVIEW"}
+                  </span>
+                </div>
+                <p style={{ color: "#94A3B8", fontSize: "0.85rem", margin: "4px 0 0 0" }}>
+                  Book: <strong style={{ color: "#F8FAFC" }}>{reviewBook.title}</strong> ({reviewBook.topic})
+                </p>
+              </div>
+              <button
+                onClick={() => setReviewModalOpen(false)}
+                style={{ background: "transparent", border: "none", color: "#94A3B8", fontSize: "1.2rem", cursor: "pointer" }}
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Navigation Tabs */}
+            <div style={{ display: "flex", gap: "8px", borderBottom: "1px solid #334155", paddingBottom: "10px", marginBottom: "16px" }}>
+              <button
+                type="button"
+                onClick={() => setReviewTab("preview")}
+                style={{
+                  padding: "8px 16px",
+                  borderRadius: "6px",
+                  border: "none",
+                  cursor: "pointer",
+                  fontSize: "0.85rem",
+                  fontWeight: 600,
+                  backgroundColor: reviewTab === "preview" ? "#3B82F6" : "#1E293B",
+                  color: "#FFFFFF",
+                }}
+              >
+                🌐 Rendered HTML Preview
+              </button>
+              <button
+                type="button"
+                onClick={() => setReviewTab("pending")}
+                style={{
+                  padding: "8px 16px",
+                  borderRadius: "6px",
+                  border: "none",
+                  cursor: "pointer",
+                  fontSize: "0.85rem",
+                  fontWeight: 600,
+                  backgroundColor: reviewTab === "pending" ? "#3B82F6" : "#1E293B",
+                  color: "#FFFFFF",
+                }}
+              >
+                📝 Edit AI Draft (Raw HTML)
+              </button>
+              <button
+                type="button"
+                onClick={() => setReviewTab("current")}
+                style={{
+                  padding: "8px 16px",
+                  borderRadius: "6px",
+                  border: "none",
+                  cursor: "pointer",
+                  fontSize: "0.85rem",
+                  fontWeight: 600,
+                  backgroundColor: reviewTab === "current" ? "#3B82F6" : "#1E293B",
+                  color: "#FFFFFF",
+                }}
+              >
+                📄 Current Production Content
+              </button>
+            </div>
+
+            {/* Tab 1: Rendered HTML Preview */}
+            {reviewTab === "preview" && (
+              <div>
+                <div style={{ marginBottom: "8px", color: "#94A3B8", fontSize: "0.8rem" }}>
+                  Below is the visual live preview of the pending AI-generated HTML content:
+                </div>
+                {reviewDraftText ? (
+                  <div
+                    style={{
+                      maxHeight: "450px",
+                      overflowY: "auto",
+                      backgroundColor: "#0F172A",
+                      padding: "20px",
+                      borderRadius: "8px",
+                      border: "1px solid #334155",
+                      color: "#E2E8F0",
+                      lineHeight: "1.6",
+                    }}
+                    dangerouslySetInnerHTML={{ __html: reviewDraftText }}
+                  />
+                ) : (
+                  <div style={{ padding: "40px", textAlign: "center", color: "#94A3B8", backgroundColor: "#0F172A", borderRadius: "8px" }}>
+                    No pending AI draft found for this book summary.
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Tab 2: Raw HTML Editor */}
+            {reviewTab === "pending" && (
+              <div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                  <label style={styles.label}>Pending AI Draft (Editable Raw HTML):</label>
+                  <span style={{ fontSize: "0.75rem", color: "#94A3B8" }}>{reviewDraftText.length} characters</span>
+                </div>
+                <textarea
+                  rows={16}
+                  value={reviewDraftText}
+                  onChange={(e) => setReviewDraftText(e.target.value)}
+                  style={{
+                    ...styles.modalTextarea,
+                    fontFamily: "ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace",
+                    fontSize: "0.85rem",
+                    backgroundColor: "#0B1120",
+                  }}
+                />
+              </div>
+            )}
+
+            {/* Tab 3: Current Live Content */}
+            {reviewTab === "current" && (
+              <div>
+                <div style={{ marginBottom: "8px", color: "#94A3B8", fontSize: "0.8rem" }}>
+                  Current Live/Production Content:
+                </div>
+                {reviewBook.content ? (
+                  <div
+                    style={{
+                      maxHeight: "450px",
+                      overflowY: "auto",
+                      backgroundColor: "#0F172A",
+                      padding: "20px",
+                      borderRadius: "8px",
+                      border: "1px solid #334155",
+                      color: "#E2E8F0",
+                      lineHeight: "1.6",
+                    }}
+                    dangerouslySetInnerHTML={{ __html: reviewBook.content }}
+                  />
+                ) : (
+                  <div style={{ padding: "40px", textAlign: "center", color: "#94A3B8", backgroundColor: "#0F172A", borderRadius: "8px" }}>
+                    No live production content currently saved.
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Modal Actions */}
+            <div style={{ ...styles.modalActions, marginTop: "20px", borderTop: "1px solid #334155", paddingTop: "14px" }}>
+              <button
+                type="button"
+                onClick={() => setReviewModalOpen(false)}
+                style={styles.cancelBtn}
+                disabled={reviewActionLoading}
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSaveDraftOnly(reviewBook._id)}
+                disabled={reviewActionLoading || !reviewDraftText}
+                style={{
+                  ...styles.cancelBtn,
+                  backgroundColor: "#334155",
+                  color: "#F8FAFC",
+                  fontWeight: 600,
+                }}
+              >
+                💾 Save Draft Edits
+              </button>
+              <button
+                type="button"
+                onClick={() => handleRejectDraft(reviewBook._id)}
+                disabled={reviewActionLoading}
+                style={{
+                  padding: "10px 16px",
+                  backgroundColor: "#EF4444",
+                  color: "#FFFFFF",
+                  border: "none",
+                  borderRadius: "8px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                ❌ Reject Draft
+              </button>
+              <button
+                type="button"
+                onClick={() => handleApproveDraft(reviewBook._id, reviewDraftText)}
+                disabled={reviewActionLoading || !reviewDraftText}
+                style={{
+                  ...styles.primaryBtn,
+                  backgroundColor: "#10B981",
+                  padding: "10px 20px",
+                  fontWeight: 700,
+                }}
+              >
+                {reviewActionLoading ? "Processing..." : "✅ Approve & Publish to Live Content"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* AI Prompt Configuration & Scraper Modal */}
       {aiModalOpen && selectedBookForAi && (
         <div style={styles.modalBackdrop}>
@@ -662,7 +1096,7 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
                   ⚡ AI Content Generator — {selectedBookForAi.title}
                 </h2>
                 <p style={{ color: "#94A3B8", fontSize: "0.82rem", margin: "4px 0 0 0" }}>
-                  Review variables and prompt instructions before launching the headless scraper.
+                  Review variables and prompt instructions before launching the scraper. Output will be saved to <strong>pendingContent</strong>.
                 </p>
               </div>
               <button
@@ -783,7 +1217,7 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
                   fontWeight: 700,
                 }}
               >
-                ⚡ Start {modalAiProvider === "deepseek" ? "DeepSeek" : "ChatGPT"} & Generate Content
+                ⚡ Start {modalAiProvider === "deepseek" ? "DeepSeek" : "ChatGPT"} & Save to Pending
               </button>
             </div>
           </div>
@@ -839,14 +1273,29 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
                 </div>
               </div>
 
-              <div>
-                <label style={styles.label}>Estimated Read Time (Minutes)</label>
-                <input
-                  type="number"
-                  value={formData.readingTimeMinutes}
-                  onChange={(e) => setFormData({ ...formData, readingTimeMinutes: parseInt(e.target.value, 10) || 10 })}
-                  style={styles.modalInput}
-                />
+              <div style={{ display: "flex", gap: "16px" }}>
+                <div style={{ flex: 1 }}>
+                  <label style={styles.label}>Estimated Read Time (Minutes)</label>
+                  <input
+                    type="number"
+                    value={formData.readingTimeMinutes}
+                    onChange={(e) => setFormData({ ...formData, readingTimeMinutes: parseInt(e.target.value, 10) || 10 })}
+                    style={styles.modalInput}
+                  />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={styles.label}>AI Content Status</label>
+                  <select
+                    value={formData.contentStatus}
+                    onChange={(e) => setFormData({ ...formData, contentStatus: e.target.value as any })}
+                    style={styles.modalInput}
+                  >
+                    <option value="DRAFT">⚪ DRAFT (Not reviewed)</option>
+                    <option value="PENDING_REVIEW">🟡 PENDING_REVIEW (AI Draft Ready)</option>
+                    <option value="APPROVED">🟢 APPROVED (Published to live)</option>
+                    <option value="REJECTED">🔴 REJECTED</option>
+                  </select>
+                </div>
               </div>
 
               {/* Cover Image URL + Cloudflare R2 Upload */}
@@ -912,12 +1361,51 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
                 )}
               </div>
 
-              {/* Rich Content (HTML or formatted text) */}
+              {/* Pending AI Generated Content Box (if exists) */}
+              {formData.pendingContent && (
+                <div style={{ padding: "14px", backgroundColor: "#172554", borderRadius: "8px", border: "1px solid #1D4ED8" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                    <div style={{ color: "#93C5FD", fontSize: "0.85rem", fontWeight: 700 }}>
+                      ⚡ Pending AI Generated Content (Awaiting Approval)
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          content: prev.pendingContent,
+                          contentStatus: "APPROVED",
+                        }))
+                      }
+                      style={{
+                        padding: "4px 10px",
+                        backgroundColor: "#10B981",
+                        color: "#FFFFFF",
+                        border: "none",
+                        borderRadius: "6px",
+                        fontSize: "0.75rem",
+                        fontWeight: 700,
+                        cursor: "pointer",
+                      }}
+                    >
+                      📋 Copy Pending to Live Content & Set Approved
+                    </button>
+                  </div>
+                  <textarea
+                    rows={6}
+                    value={formData.pendingContent}
+                    onChange={(e) => setFormData({ ...formData, pendingContent: e.target.value })}
+                    style={{ ...styles.modalTextarea, fontFamily: "monospace", fontSize: "0.82rem", backgroundColor: "#0F172A" }}
+                  />
+                </div>
+              )}
+
+              {/* Live Rich Content (HTML or formatted text) */}
               <div>
-                <label style={styles.label}>Summary Content (HTML formatted)</label>
+                <label style={styles.label}>Live Production Content (HTML formatted — Served to Users)</label>
                 <textarea
                   rows={8}
-                  placeholder="<h2>1. Core Principle</h2><p>Summary paragraph...</p><blockquote>Quote</blockquote> (Can be left empty if automated AI Cron is queued)"
+                  placeholder="<h2>1. Core Principle</h2><p>Summary paragraph...</p><blockquote>Quote</blockquote>"
                   value={formData.content}
                   onChange={(e) => setFormData({ ...formData, content: e.target.value })}
                   style={{ ...styles.modalTextarea, fontFamily: "monospace", fontSize: "0.85rem" }}
@@ -938,7 +1426,7 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
                       ⚡ Queue for Automated AI Content Generation (Cron Job)
                     </div>
                     <div style={{ color: "#94A3B8", fontSize: "0.78rem" }}>
-                      When checked, the Multi-Book AI cron scraper will automatically generate and populate this summary's HTML content.
+                      When checked, the Multi-Book AI cron scraper will generate content into <strong>pendingContent</strong> for your review.
                     </div>
                   </div>
                 </label>

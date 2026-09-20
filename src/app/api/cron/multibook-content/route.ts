@@ -99,9 +99,10 @@ export async function GET(request: NextRequest) {
           throw new Error("Empty response from scraper");
         }
 
-        // Update summary with generated content and clear the flag
+        // Update summary with pending content, set contentStatus to PENDING_REVIEW, and clear the cron flag
         await BookSummary.findByIdAndUpdate(summary._id, {
-          content: generatedContent,
+          pendingContent: generatedContent,
+          contentStatus: "PENDING_REVIEW",
           needsContentGeneration: false,
         });
 

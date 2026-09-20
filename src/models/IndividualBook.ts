@@ -14,6 +14,8 @@ export interface IIndividualBook extends Document {
   readingTimeMinutes: number;
   shortDescription?: string;
   content: string;
+  pendingContent?: string; // Newly generated AI content awaiting admin review
+  contentStatus?: "DRAFT" | "PENDING_REVIEW" | "APPROVED" | "REJECTED"; // Review status of the content
   chapters?: IChapter[];
   isFeatured?: boolean;
   status: "ACTIVE" | "INACTIVE" | "PENDING";
@@ -36,7 +38,14 @@ const IndividualBookSchema = new Schema<IIndividualBook>(
     audioUrl: { type: String, default: "" },
     readingTimeMinutes: { type: Number, default: 12 },
     shortDescription: { type: String, default: "" },
-    content: { type: String, required: true },
+    content: { type: String, default: "" },
+    pendingContent: { type: String, default: "" }, // Raw/formatted AI output awaiting approval
+    contentStatus: {
+      type: String,
+      enum: ["DRAFT", "PENDING_REVIEW", "APPROVED", "REJECTED"],
+      default: "DRAFT",
+      index: true,
+    },
     chapters: { type: [ChapterSchema], default: [] },
     isFeatured: { type: Boolean, default: false, index: true },
     status: {

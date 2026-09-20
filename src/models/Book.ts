@@ -13,6 +13,8 @@ export interface IBookSummary extends Document {
   readingTimeMinutes: number;
   shortDescription?: string;
   content: string; // HTML formatted content
+  pendingContent?: string; // Newly generated AI content awaiting admin review
+  contentStatus?: "DRAFT" | "PENDING_REVIEW" | "APPROVED" | "REJECTED"; // Review status of the content
   chapters?: IChapter[];
   isTopCombine: boolean;
   status: "ACTIVE" | "INACTIVE" | "PENDING";
@@ -34,7 +36,14 @@ const BookSummarySchema = new Schema<IBookSummary>(
     audioUrl: { type: String, default: "" },
     readingTimeMinutes: { type: Number, default: 10 },
     shortDescription: { type: String, default: "" },
-    content: { type: String, required: true }, // Rich HTML content
+    content: { type: String, default: "" }, // Rich HTML content
+    pendingContent: { type: String, default: "" }, // Raw/formatted AI output awaiting approval
+    contentStatus: {
+      type: String,
+      enum: ["DRAFT", "PENDING_REVIEW", "APPROVED", "REJECTED"],
+      default: "DRAFT",
+      index: true,
+    },
     chapters: { type: [ChapterSchema], default: [] },
     isTopCombine: { type: Boolean, default: true, index: true },
     status: {
