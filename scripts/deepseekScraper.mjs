@@ -187,6 +187,18 @@ async function handleLoginMode() {
     console.log('======================================================\n');
 
     await askQuestion('Press [ENTER] in this terminal once you are logged in and ready to save profile: ');
+
+    // Export session cookies using Chrome DevTools Protocol for cross-platform portability
+    try {
+      const client = await page.target().createCDPSession();
+      const { cookies } = await client.send('Network.getAllCookies');
+      const cookiePath = path.resolve(__dirname, '../deepseek_cookies.json');
+      fs.writeFileSync(cookiePath, JSON.stringify(cookies, null, 2));
+      console.log(`[DeepSeek Scraper] Successfully exported ${cookies.length} cookies to deepseek_cookies.json`);
+    } catch (cookieErr) {
+      console.warn('[DeepSeek Scraper] Failed to export cookies:', cookieErr.message);
+    }
+
     console.log('[DeepSeek Scraper] Session saved successfully!');
   } catch (err) {
     console.error('[DeepSeek Scraper] Error during login session:', err.message);
@@ -208,6 +220,21 @@ async function scrapeDeepSeek(prompt, options = {}) {
   const { browser, page } = await launchBrowser(isHeadless);
 
   try {
+    // Load session cookies if exported
+    const cookiePath = path.resolve(__dirname, '../deepseek_cookies.json');
+    if (fs.existsSync(cookiePath)) {
+      try {
+        const rawCookies = JSON.parse(fs.readFileSync(cookiePath, 'utf8'));
+        if (Array.isArray(rawCookies) && rawCookies.length > 0) {
+          const client = await page.target().createCDPSession();
+          await client.send('Network.setCookies', { cookies: rawCookies });
+          console.log(`[DeepSeek Scraper] Loaded ${rawCookies.length} session cookies from deepseek_cookies.json`);
+        }
+      } catch (cookieLoadErr) {
+        console.warn('[DeepSeek Scraper] Could not import cookies from file:', cookieLoadErr.message);
+      }
+    }
+
     console.log('[DeepSeek Scraper] Navigating to https://chat.deepseek.com/ ...');
     await page.goto('https://chat.deepseek.com/', { waitUntil: 'networkidle2', timeout: 60000 });
 

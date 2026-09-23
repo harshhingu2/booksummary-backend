@@ -190,6 +190,18 @@ async function handleLoginMode() {
     console.log('======================================================\n');
 
     await askQuestion('Press [ENTER] in this terminal once you are logged in and ready to save profile: ');
+
+    // Export all session cookies using Chrome DevTools Protocol (CDP) for cross-platform Linux compatibility
+    try {
+      const client = await page.target().createCDPSession();
+      const { cookies } = await client.send('Network.getAllCookies');
+      const cookiePath = path.resolve(__dirname, '../chatgpt_cookies.json');
+      fs.writeFileSync(cookiePath, JSON.stringify(cookies, null, 2));
+      console.log(`[ChatGPT Scraper] Successfully exported ${cookies.length} cookies to chatgpt_cookies.json`);
+    } catch (cookieErr) {
+      console.warn('[ChatGPT Scraper] Failed to export cookies to JSON:', cookieErr.message);
+    }
+
     console.log('[ChatGPT Scraper] Session saved successfully!');
   } catch (err) {
     console.error('[ChatGPT Scraper] Error during login session:', err.message);
@@ -208,6 +220,21 @@ async function scrapeChatGPT(prompt, options) {
   const { browser, page } = await launchBrowser(options.headless);
 
   try {
+    // Load session cookies if exported
+    const cookiePath = path.resolve(__dirname, '../chatgpt_cookies.json');
+    if (fs.existsSync(cookiePath)) {
+      try {
+        const rawCookies = JSON.parse(fs.readFileSync(cookiePath, 'utf8'));
+        if (Array.isArray(rawCookies) && rawCookies.length > 0) {
+          const client = await page.target().createCDPSession();
+          await client.send('Network.setCookies', { cookies: rawCookies });
+          console.log(`[ChatGPT Scraper] Loaded ${rawCookies.length} session cookies from chatgpt_cookies.json`);
+        }
+      } catch (cookieLoadErr) {
+        console.warn('[ChatGPT Scraper] Could not import cookies from file:', cookieLoadErr.message);
+      }
+    }
+
     console.log('[ChatGPT Scraper] Navigating to https://chatgpt.com/ ...');
     await page.goto('https://chatgpt.com/', { waitUntil: 'networkidle2', timeout: 60000 });
 
