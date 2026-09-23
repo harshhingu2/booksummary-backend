@@ -1,0 +1,14 @@
+2026/09/18-01:08:27.357 1644 Reusing MANIFEST D:\IT\Web dev\booksummarybackend\.deepseek_profile\Default\Local Storage\leveldb/MANIFEST-000001
+2026/09/18-01:08:27.364 1644 Recovering log #36
+2026/09/18-01:08:27.364 1644 Level-0 table #38: started
+2026/09/18-01:08:27.370 1644 Level-0 table #38: 22823 bytes OK
+2026/09/18-01:08:27.374 1644 Delete type=0 #36
+2026/09/18-01:08:27.374 1f70 Compacting 4@0 + 1@1 files
+2026/09/18-01:08:27.379 1f70 Generated table #40@0: 39 keys, 14699 bytes
+2026/09/18-01:08:27.380 1f70 Compacted 4@0 + 1@1 files => 14699 bytes
+2026/09/18-01:08:27.381 1f70 compacted to: files[ 0 1 0 0 0 0 0 ]
+2026/09/18-01:08:27.382 1f70 Delete type=2 #27
+2026/09/18-01:08:27.382 1f70 Delete type=2 #29
+2026/09/18-01:08:27.382 1f70 Delete type=2 #32
+2026/09/18-01:08:27.382 1f70 Delete type=2 #35
+2026/09/18-01:08:27.382 1f70 Delete type=2 #38

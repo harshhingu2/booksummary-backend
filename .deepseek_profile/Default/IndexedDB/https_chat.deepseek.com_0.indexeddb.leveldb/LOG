@@ -1,0 +1,14 @@
+2026/09/18-01:08:27.892 3f44 Reusing MANIFEST D:\IT\Web dev\booksummarybackend\.deepseek_profile\Default\IndexedDB\https_chat.deepseek.com_0.indexeddb.leveldb/MANIFEST-000001
+2026/09/18-01:08:27.892 3f44 Recovering log #86
+2026/09/18-01:08:27.892 3f44 Reusing old log D:\IT\Web dev\booksummarybackend\.deepseek_profile\Default\IndexedDB\https_chat.deepseek.com_0.indexeddb.leveldb/000086.log 
+2026/09/18-01:08:27.892 3f44 Delete type=2 #84
+2026/09/18-01:08:27.895 4f98 Level-0 table #91: started
+2026/09/18-01:08:27.898 4f98 Level-0 table #91: 1629 bytes OK
+2026/09/18-01:08:27.899 4f98 Delete type=0 #86
+2026/09/18-01:08:27.900 3f44 Manual compaction at level-0 from '\x00\x18\x00\x00\x00' @ 72057594037927935 : 1 .. '\x00\x19\x00\x00\x00' @ 0 : 0; will stop at '\x00\x18\x00\x00\xc8 \x00l\x00o\x00c\x00a\x00l\x00-\x00f\x00o\x00r\x00a\x00g\x00e\x00-\x00d\x00e\x00t\x00e\x00c\x00t\x00-\x00b\x00l\x00o\x00b\x00-\x00s\x00u\x00p\x00p\x00o\x00r\x00t' @ 2381 : 1
+2026/09/18-01:08:27.900 3f44 Compacting 1@0 + 1@1 files
+2026/09/18-01:08:27.901 3f44 Generated table #92@0: 36 keys, 3440 bytes
+2026/09/18-01:08:27.901 3f44 Compacted 1@0 + 1@1 files => 3440 bytes
+2026/09/18-01:08:27.902 3f44 compacted to: files[ 0 1 1 0 0 0 0 ]
+2026/09/18-01:08:27.902 3f44 Delete type=2 #91
+2026/09/18-01:08:27.902 3f44 Manual compaction at level-0 from '\x00\x18\x00\x00\xc8 \x00l\x00o\x00c\x00a\x00l\x00-\x00f\x00o\x00r\x00a\x00g\x00e\x00-\x00d\x00e\x00t\x00e\x00c\x00t\x00-\x00b\x00l\x00o\x00b\x00-\x00s\x00u\x00p\x00p\x00o\x00r\x00t' @ 2381 : 1 .. '\x00\x19\x00\x00\x00' @ 0 : 0; will stop at (end)
