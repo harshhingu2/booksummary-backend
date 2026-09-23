@@ -89,8 +89,21 @@ async function launchBrowser(headless = false) {
   }
 
   function findChromeExecutable() {
-    // 1. Check system Google Chrome first (cleanest interactive window on Windows)
+    // 0. Environment variables
+    if (process.env.PUPPETEER_EXECUTABLE_PATH && fs.existsSync(process.env.PUPPETEER_EXECUTABLE_PATH)) {
+      return process.env.PUPPETEER_EXECUTABLE_PATH;
+    }
+    if (process.env.CHROME_BIN && fs.existsSync(process.env.CHROME_BIN)) {
+      return process.env.CHROME_BIN;
+    }
+
+    // 1. System Chrome / Chromium locations (Windows + Linux VPS)
     const fallbackPaths = [
+      '/usr/bin/google-chrome-stable',
+      '/usr/bin/google-chrome',
+      '/usr/bin/chromium-browser',
+      '/usr/bin/chromium',
+      '/snap/bin/chromium',
       'C:\\Program Files\\Google\\Chrome\\Application\\chrome.exe',
       'C:\\Program Files (x86)\\Google\\Chrome\\Application\\chrome.exe',
       process.env.LOCALAPPDATA ? path.join(process.env.LOCALAPPDATA, 'Google\\Chrome\\Application\\chrome.exe') : null
@@ -99,9 +112,10 @@ async function launchBrowser(headless = false) {
     const systemChrome = fallbackPaths.find(p => fs.existsSync(p));
     if (systemChrome) return systemChrome;
 
-    // 2. Check puppeteer cache directory for any installed chrome.exe
-    const cacheDir = path.join(process.env.USERPROFILE || 'C:\\Users\\Harsh', '.cache', 'puppeteer');
-    if (fs.existsSync(cacheDir)) {
+    // 2. Check puppeteer cache directory for any installed chrome binary
+    const homeDir = process.env.HOME || process.env.USERPROFILE || '';
+    const cacheDir = homeDir ? path.join(homeDir, '.cache', 'puppeteer') : null;
+    if (cacheDir && fs.existsSync(cacheDir)) {
       const walkSync = (dir) => {
         let results = [];
         try {
@@ -111,7 +125,7 @@ async function launchBrowser(headless = false) {
             const stat = fs.statSync(fullPath);
             if (stat && stat.isDirectory()) {
               results = results.concat(walkSync(fullPath));
-            } else if (file.toLowerCase() === 'chrome.exe') {
+            } else if (file.toLowerCase() === 'chrome.exe' || file === 'chrome') {
               results.push(fullPath);
             }
           }
@@ -138,6 +152,8 @@ async function launchBrowser(headless = false) {
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
+      '--disable-dev-shm-usage',
+      '--disable-gpu',
       '--disable-infobars',
       '--start-maximized',
       '--disable-blink-features=AutomationControlled'
