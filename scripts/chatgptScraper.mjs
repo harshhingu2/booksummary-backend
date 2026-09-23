@@ -222,20 +222,32 @@ async function scrapeChatGPT(prompt, options) {
     console.log('[ChatGPT Scraper] Waiting for prompt input area...');
     const inputSelectorCandidates = [
       '#prompt-textarea',
+      'div#prompt-textarea',
       'div[contenteditable="true"]',
+      'div[role="textbox"]',
       'textarea[tabindex="0"]',
-      'div#prompt-textarea'
+      'textarea[placeholder*="Ask ChatGPT"]',
+      '[data-placeholder*="Ask ChatGPT"]'
     ];
 
     let inputElement = null;
-    for (const selector of inputSelectorCandidates) {
-      try {
-        await page.waitForSelector(selector, { timeout: 10000 });
-        inputElement = await page.$(selector);
-        if (inputElement) break;
-      } catch {
-        // try next
+    for (let attempt = 0; attempt < 3; attempt++) {
+      for (const selector of inputSelectorCandidates) {
+        try {
+          await page.waitForSelector(selector, { timeout: 8000 });
+          inputElement = await page.$(selector);
+          if (inputElement) break;
+        } catch {
+          // try next
+        }
       }
+      if (inputElement) break;
+      await new Promise(r => setTimeout(r, 2000));
+    }
+
+    if (!inputElement) {
+      // Last resort: evaluate any contenteditable or textarea on page
+      inputElement = await page.$('div[contenteditable="true"], textarea');
     }
 
     if (!inputElement) {
@@ -243,42 +255,68 @@ async function scrapeChatGPT(prompt, options) {
     }
 
     console.log('[ChatGPT Scraper] Entering prompt...');
+    await inputElement.focus();
     await inputElement.click();
+    await new Promise(r => setTimeout(r, 400));
 
-    // Paste or type prompt
-    // Typing large text via page.evaluate is much faster and cleaner
-    await page.evaluate((text) => {
-      const el = document.querySelector('#prompt-textarea') || document.querySelector('div[contenteditable="true"]');
+    // Reliable input insertion across React / Lexical editors
+    const typed = await page.evaluate((text) => {
+      const el = document.querySelector('#prompt-textarea') || 
+                 document.querySelector('div[contenteditable="true"]') || 
+                 document.querySelector('div[role="textbox"]') || 
+                 document.querySelector('textarea');
       if (el) {
+        el.focus();
         if (el.tagName === 'TEXTAREA') {
           el.value = text;
+          el.dispatchEvent(new Event('input', { bubbles: true }));
+          el.dispatchEvent(new Event('change', { bubbles: true }));
+          return true;
         } else {
-          el.innerText = text;
+          // Use execCommand to simulate native text entry for Lexical / ProseMirror
+          document.execCommand('selectAll', false, null);
+          const success = document.execCommand('insertText', false, text);
+          if (!success || !el.innerText || el.innerText.trim().length === 0) {
+            el.innerText = text;
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+          }
+          return true;
         }
-        el.dispatchEvent(new Event('input', { bubbles: true }));
       }
+      return false;
     }, prompt);
 
-    // Give a short pause for the UI state to update
-    await new Promise(r => setTimeout(r, 600));
+    if (!typed) {
+      await page.keyboard.type(prompt.slice(0, 100));
+    }
+
+    // Give a short pause for the UI state to enable send button
+    await new Promise(r => setTimeout(r, 800));
 
     // Look for send button or press Enter
     const sendButtonSelectorCandidates = [
       'button[data-testid="send-button"]',
       'button[aria-label="Send prompt"]',
-      'button[aria-label="Send message"]'
+      'button[aria-label="Send message"]',
+      'button[aria-label="Ask ChatGPT"]',
+      '#composer-submit-button',
+      'button:has(svg)'
     ];
 
     let clicked = false;
     for (const btnSelector of sendButtonSelectorCandidates) {
-      const btn = await page.$(btnSelector);
-      if (btn) {
-        const isDisabled = await page.evaluate(b => b.disabled || b.getAttribute('aria-disabled') === 'true', btn);
-        if (!isDisabled) {
-          await btn.click();
-          clicked = true;
-          break;
+      try {
+        const btn = await page.$(btnSelector);
+        if (btn) {
+          const isDisabled = await page.evaluate(b => b.disabled || b.getAttribute('aria-disabled') === 'true', btn);
+          if (!isDisabled) {
+            await btn.click();
+            clicked = true;
+            break;
+          }
         }
+      } catch {
+        // continue
       }
     }
 
