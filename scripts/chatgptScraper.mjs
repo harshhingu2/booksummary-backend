@@ -156,6 +156,7 @@ async function launchBrowser(headless = false) {
     headless: headless ? 'new' : false,
     userDataDir: USER_DATA_DIR,
     defaultViewport: null,
+    protocolTimeout: 300000, // 5 minutes to prevent CDP callFunctionOn timeouts during long streaming
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
@@ -381,16 +382,29 @@ async function scrapeChatGPT(prompt, options) {
         throw new Error(`Timeout after ${options.timeout / 1000}s waiting for ChatGPT response.`);
       }
 
-      const stopBtn = await page.$('button[data-testid="stop-button"], button[aria-label="Stop generating"], button[aria-label="Stop streaming"]');
+      let stopBtn = null;
+      try {
+        stopBtn = await page.$('button[data-testid="stop-button"], button[aria-label="Stop generating"], button[aria-label="Stop streaming"]');
+      } catch (pollErr) {
+        // Main thread momentarily busy with token streaming
+        await new Promise(r => setTimeout(r, 2000));
+        continue;
+      }
+
       if (!stopBtn) {
-        // Double check after 1.5s to avoid race conditions right when sending
-        await new Promise(r => setTimeout(r, 1500));
-        const stopBtnRetry = await page.$('button[data-testid="stop-button"], button[aria-label="Stop generating"], button[aria-label="Stop streaming"]');
+        // Double check after 2s to avoid race conditions right when sending
+        await new Promise(r => setTimeout(r, 2000));
+        let stopBtnRetry = null;
+        try {
+          stopBtnRetry = await page.$('button[data-testid="stop-button"], button[aria-label="Stop generating"], button[aria-label="Stop streaming"]');
+        } catch {
+          // continue
+        }
         if (!stopBtnRetry) {
           isGenerating = false;
         }
       } else {
-        await new Promise(r => setTimeout(r, 1000));
+        await new Promise(r => setTimeout(r, 2000));
       }
     }
 
