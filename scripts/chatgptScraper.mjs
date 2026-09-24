@@ -297,9 +297,26 @@ async function scrapeChatGPT(prompt, options) {
       throw new Error('Could not find ChatGPT input box. ChatGPT might be presenting a verification challenge or UI updated.');
     }
 
-    console.log('[ChatGPT Scraper] Entering prompt...');
-    await inputElement.focus();
-    await inputElement.click();
+    console.log('[ChatGPT Scraper] Dismissing any overlay dialogs if present...');
+    await page.evaluate(() => {
+      const closeSelectors = [
+        'button#onetrust-accept-btn-handler',
+        'button[data-testid="close-dialog-button"]',
+        'button[aria-label="Close"]',
+        'div[role="dialog"] button'
+      ];
+      for (const sel of closeSelectors) {
+        document.querySelectorAll(sel).forEach(b => {
+          try { b.click(); } catch {}
+        });
+      }
+    });
+
+    console.log('[ChatGPT Scraper] Entering prompt into editor...');
+    await page.evaluate((el) => {
+      el.focus();
+    }, inputElement);
+    await inputElement.click({ delay: 50 }).catch(() => {});
     await new Promise(r => setTimeout(r, 400));
 
     // Reliable input insertion across React / Lexical editors
@@ -329,20 +346,21 @@ async function scrapeChatGPT(prompt, options) {
       }
     }, prompt);
 
+    console.log('[ChatGPT Scraper] Triggering state update...');
     // Keystrokes to trigger Lexical React state update and enable the send button
     await page.keyboard.press('Space');
     await new Promise(r => setTimeout(r, 100));
     await page.keyboard.press('Backspace');
-    await new Promise(r => setTimeout(r, 600));
+    await new Promise(r => setTimeout(r, 500));
 
+    console.log('[ChatGPT Scraper] Submitting prompt...');
     // Look for send button or press Enter
     const sendButtonSelectorCandidates = [
       'button[data-testid="send-button"]',
       'button[aria-label*="Send"]',
       '#composer-submit-button',
       'button[data-testid="composer-speech-button"] + button',
-      'form button[type="submit"]',
-      'button:has(svg)'
+      'form button[type="submit"]'
     ];
 
     let clicked = false;
@@ -352,8 +370,10 @@ async function scrapeChatGPT(prompt, options) {
         if (btn) {
           const isDisabled = await page.evaluate(b => b.disabled || b.getAttribute('aria-disabled') === 'true', btn);
           if (!isDisabled) {
-            await btn.click();
+            // Click natively via DOM evaluate so it never hangs on coordinate hit-testing
+            await page.evaluate(b => b.click(), btn);
             clicked = true;
+            console.log(`[ChatGPT Scraper] Clicked send button via selector: ${btnSelector}`);
             break;
           }
         }
@@ -363,7 +383,7 @@ async function scrapeChatGPT(prompt, options) {
     }
 
     if (!clicked) {
-      // Fallback to pressing Enter
+      console.log('[ChatGPT Scraper] Send button not enabled, falling back to Enter key...');
       await page.keyboard.press('Enter');
     }
 
