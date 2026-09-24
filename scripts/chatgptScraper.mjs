@@ -389,41 +389,69 @@ async function scrapeChatGPT(prompt, options) {
 
     console.log('[ChatGPT Scraper] Prompt sent! Waiting for response to generate...');
 
-    // Wait for generation to start and complete
-    // ChatGPT displays a stop button (data-testid="stop-button" or aria-label="Stop generating") while generating
-    await new Promise(r => setTimeout(r, 2000));
+    // Wait at least 4 seconds for generation to commence and render first tokens
+    await new Promise(r => setTimeout(r, 4000));
 
     const startTime = Date.now();
     let isGenerating = true;
+    let lastLength = 0;
+    let stableCount = 0;
 
     while (isGenerating) {
       if (Date.now() - startTime > options.timeout) {
         throw new Error(`Timeout after ${options.timeout / 1000}s waiting for ChatGPT response.`);
       }
 
-      let stopBtn = null;
-      try {
-        stopBtn = await page.$('button[data-testid="stop-button"], button[aria-label="Stop generating"], button[aria-label="Stop streaming"]');
-      } catch (pollErr) {
-        // Main thread momentarily busy with token streaming
-        await new Promise(r => setTimeout(r, 2000));
-        continue;
-      }
+      // Check if Stop button exists (active streaming)
+      const isStopPresent = await page.evaluate(() => {
+        const stopBtn = document.querySelector('button[data-testid="stop-button"], button[aria-label*="Stop"]');
+        return !!stopBtn;
+      });
 
-      if (!stopBtn) {
-        // Double check after 2s to avoid race conditions right when sending
+      // Check current text length of the latest response
+      const currentTextLength = await page.evaluate(() => {
+        const assistantMsgs = document.querySelectorAll('[data-message-author-role="assistant"]');
+        if (assistantMsgs.length > 0) {
+          const last = assistantMsgs[assistantMsgs.length - 1];
+          const md = last.querySelector('.markdown, .prose') || last;
+          return (md.innerText || md.textContent || '').trim().length;
+        }
+
+        const turns = document.querySelectorAll('article, [data-testid^="conversation-turn-"]');
+        if (turns.length > 1) {
+          const lastTurn = turns[turns.length - 1];
+          const md = lastTurn.querySelector('.markdown, .prose') || lastTurn;
+          return (md.innerText || md.textContent || '').trim().length;
+        }
+
+        const allProse = document.querySelectorAll('.markdown, .prose');
+        if (allProse.length > 0) {
+          const last = allProse[allProse.length - 1];
+          return (last.innerText || last.textContent || '').trim().length;
+        }
+
+        return 0;
+      });
+
+      if (isStopPresent) {
+        stableCount = 0;
+        lastLength = currentTextLength;
         await new Promise(r => setTimeout(r, 2000));
-        let stopBtnRetry = null;
-        try {
-          stopBtnRetry = await page.$('button[data-testid="stop-button"], button[aria-label="Stop generating"], button[aria-label="Stop streaming"]');
-        } catch {
-          // continue
-        }
-        if (!stopBtnRetry) {
-          isGenerating = false;
-        }
       } else {
-        await new Promise(r => setTimeout(r, 2000));
+        // Stop button is gone. Check if content has stopped changing and has substantial length (> 50 chars)
+        if (currentTextLength > 50 && currentTextLength === lastLength) {
+          stableCount++;
+          // Require at least 2 consecutive stable checks (~4s) to guarantee completion
+          if (stableCount >= 2) {
+            isGenerating = false;
+          } else {
+            await new Promise(r => setTimeout(r, 2000));
+          }
+        } else {
+          lastLength = currentTextLength;
+          stableCount = 0;
+          await new Promise(r => setTimeout(r, 2000));
+        }
       }
     }
 
@@ -448,12 +476,11 @@ async function scrapeChatGPT(prompt, options) {
       // 2. Modern ChatGPT: article turns
       const turns = document.querySelectorAll('article, [data-testid^="conversation-turn-"]');
       if (turns.length > 0) {
-        // Find the last assistant turn (usually even turns or turns containing .markdown/.prose)
         for (let i = turns.length - 1; i >= 0; i--) {
           const turn = turns[i];
           const md = turn.querySelector('.markdown, .prose') || turn;
           const text = md.innerText?.trim() || md.textContent?.trim() || '';
-          if (text) {
+          if (text && text.length > 20) {
             return {
               text: text,
               html: md.innerHTML?.trim() || text
