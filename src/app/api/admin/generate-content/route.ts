@@ -1,5 +1,5 @@
 export const dynamic = "force-dynamic";
-export const maxDuration = 180; // 3 minutes timeout for AI scraping
+export const maxDuration = 240; // 4 minutes timeout for AI scraping
 
 import { NextRequest, NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
@@ -91,8 +91,8 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
     const headlessFlag = isHeadless ? "--headless" : "--headful";
     const { stdout, stderr } = await execFilePromise(
       process.execPath,
-      [scriptPath, headlessFlag, prompt],
-      { timeout: 180000, maxBuffer: 10 * 1024 * 1024 }
+      [scriptPath, headlessFlag, "--timeout", "200", "--prompt", prompt],
+      { timeout: 240000, maxBuffer: 10 * 1024 * 1024 }
     );
 
     // Extract content between delimiters

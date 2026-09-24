@@ -1,6 +1,0 @@
-2026/09/25-00:53:50.224 44dc Reusing MANIFEST D:\IT\Web dev\booksummarybackend\.chatgpt_profile\Default\Local Storage\leveldb/MANIFEST-000001
-2026/09/25-00:53:50.224 44dc Recovering log #19
-2026/09/25-00:53:50.226 44dc Reusing old log D:\IT\Web dev\booksummarybackend\.chatgpt_profile\Default\Local Storage\leveldb/000019.log 
-2026/09/25-00:54:44.883 4478 Level-0 table #24: started
-2026/09/25-00:54:44.888 4478 Level-0 table #24: 12030 bytes OK
-2026/09/25-00:54:44.890 4478 Delete type=0 #19

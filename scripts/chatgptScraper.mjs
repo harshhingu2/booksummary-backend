@@ -18,11 +18,12 @@ function parseArgs() {
     login: false,
     prompt: '',
     headless: false, // Default to visible for stability with Cloudflare & interactive use
-    timeout: 120000,
+    timeout: 180000,
     output: null,
     help: false
   };
 
+  const promptParts = [];
   for (let i = 0; i < args.length; i++) {
     const arg = args[i];
     if (arg === '--login') {
@@ -35,11 +36,17 @@ function parseArgs() {
       options.output = args[++i];
     } else if (arg === '--timeout' || arg === '-t') {
       options.timeout = parseInt(args[++i], 10) * 1000;
+    } else if (arg === '--prompt' || arg === '-p') {
+      options.prompt = args[++i] || '';
     } else if (arg === '--help' || arg === '-h') {
       options.help = true;
-    } else if (!arg.startsWith('-')) {
-      options.prompt = arg;
+    } else {
+      promptParts.push(arg);
     }
+  }
+
+  if (!options.prompt && promptParts.length > 0) {
+    options.prompt = promptParts.join(' ');
   }
 
   return options;
@@ -226,9 +233,17 @@ async function scrapeChatGPT(prompt, options) {
       try {
         const rawCookies = JSON.parse(fs.readFileSync(cookiePath, 'utf8'));
         if (Array.isArray(rawCookies) && rawCookies.length > 0) {
+          const sanitizedCookies = rawCookies.map(c => {
+            const cookie = { ...c };
+            if (cookie.expires && cookie.expires <= 0) {
+              delete cookie.expires;
+            }
+            delete cookie.size;
+            return cookie;
+          });
           const client = await page.target().createCDPSession();
-          await client.send('Network.setCookies', { cookies: rawCookies });
-          console.log(`[ChatGPT Scraper] Loaded ${rawCookies.length} session cookies from chatgpt_cookies.json`);
+          await client.send('Network.setCookies', { cookies: sanitizedCookies });
+          console.log(`[ChatGPT Scraper] Loaded ${sanitizedCookies.length} session cookies from chatgpt_cookies.json`);
         }
       } catch (cookieLoadErr) {
         console.warn('[ChatGPT Scraper] Could not import cookies from file:', cookieLoadErr.message);

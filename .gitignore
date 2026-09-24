@@ -40,38 +40,9 @@ yarn-error.log*
 *.tsbuildinfo
 next-env.d.ts
 
-# scraper browser caches & temporary files
-.chatgpt_profile/**/Cache/
-.chatgpt_profile/**/Code Cache/
-.chatgpt_profile/**/GPUCache/
-.chatgpt_profile/**/GrShaderCache/
-.chatgpt_profile/**/ShaderCache/
-.chatgpt_profile/**/DawnCache/
-.chatgpt_profile/**/GPUPersistentCache/
-.chatgpt_profile/**/Crashpad/
-.chatgpt_profile/**/BrowserMetrics/
-.chatgpt_profile/**/component_crx_cache/
-.chatgpt_profile/**/extensions_crx_cache/
-.chatgpt_profile/**/*.lock
-.chatgpt_profile/**/*.tmp
-.chatgpt_profile/**/Singleton*
-.chatgpt_profile/**/lockfile
-.chatgpt_profile/**/DevToolsActivePort
-
-.deepseek_profile/**/Cache/
-.deepseek_profile/**/Code Cache/
-.deepseek_profile/**/GPUCache/
-.deepseek_profile/**/GrShaderCache/
-.deepseek_profile/**/ShaderCache/
-.deepseek_profile/**/DawnCache/
-.deepseek_profile/**/GPUPersistentCache/
-.deepseek_profile/**/Crashpad/
-.deepseek_profile/**/BrowserMetrics/
-.deepseek_profile/**/component_crx_cache/
-.deepseek_profile/**/extensions_crx_cache/
-.deepseek_profile/**/*.lock
-.deepseek_profile/**/*.tmp
-.deepseek_profile/**/Singleton*
-.deepseek_profile/**/lockfile
-.deepseek_profile/**/DevToolsActivePort
+# scraper browser profiles & caches
+.chatgpt_profile/
+.deepseek_profile/
+chatgpt_scraper_error.png
+deepseek_scraper_error.png
 
