@@ -303,7 +303,7 @@ async function scrapeChatGPT(prompt, options) {
     await new Promise(r => setTimeout(r, 400));
 
     // Reliable input insertion across React / Lexical editors
-    const typed = await page.evaluate((text) => {
+    await page.evaluate((text) => {
       const el = document.querySelector('#prompt-textarea') || 
                  document.querySelector('div[contenteditable="true"]') || 
                  document.querySelector('div[role="textbox"]') || 
@@ -314,35 +314,34 @@ async function scrapeChatGPT(prompt, options) {
           el.value = text;
           el.dispatchEvent(new Event('input', { bubbles: true }));
           el.dispatchEvent(new Event('change', { bubbles: true }));
-          return true;
         } else {
-          // Use execCommand to simulate native text entry for Lexical / ProseMirror
-          document.execCommand('selectAll', false, null);
-          const success = document.execCommand('insertText', false, text);
-          if (!success || !el.innerText || el.innerText.trim().length === 0) {
-            el.innerText = text;
-            el.dispatchEvent(new Event('input', { bubbles: true }));
+          // Lexical editor paragraph nodes
+          el.innerHTML = '';
+          const lines = text.split('\n');
+          for (const line of lines) {
+            const p = document.createElement('p');
+            p.textContent = line.length > 0 ? line : '\u00A0';
+            el.appendChild(p);
           }
-          return true;
+          el.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true, inputType: 'insertText' }));
+          el.dispatchEvent(new Event('change', { bubbles: true }));
         }
       }
-      return false;
     }, prompt);
 
-    if (!typed) {
-      await page.keyboard.type(prompt.slice(0, 100));
-    }
-
-    // Give a short pause for the UI state to enable send button
-    await new Promise(r => setTimeout(r, 800));
+    // Keystrokes to trigger Lexical React state update and enable the send button
+    await page.keyboard.press('Space');
+    await new Promise(r => setTimeout(r, 100));
+    await page.keyboard.press('Backspace');
+    await new Promise(r => setTimeout(r, 600));
 
     // Look for send button or press Enter
     const sendButtonSelectorCandidates = [
       'button[data-testid="send-button"]',
-      'button[aria-label="Send prompt"]',
-      'button[aria-label="Send message"]',
-      'button[aria-label="Ask ChatGPT"]',
+      'button[aria-label*="Send"]',
       '#composer-submit-button',
+      'button[data-testid="composer-speech-button"] + button',
+      'form button[type="submit"]',
       'button:has(svg)'
     ];
 
