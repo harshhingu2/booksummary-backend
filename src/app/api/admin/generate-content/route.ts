@@ -79,7 +79,9 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
 4. Actionable Real-World Applications (structured as bullet points with <ul> and <li>)`;
     }
 
-    const isHeadless = body.headless !== undefined ? Boolean(body.headless) : false; // Default to false (visible window) so user can see it live
+    // Default to headless on Linux/production or when not explicitly requested as headful
+    const isLinux = process.platform === "linux";
+    const isHeadless = body.headless !== undefined ? Boolean(body.headless) : (isLinux || process.env.NODE_ENV === "production" ? true : false);
 
     console.log(`[AI Generation] Triggering ${selectedProvider.toUpperCase()} scraper for: "${title}" (${type}, headless: ${isHeadless})...`);
 

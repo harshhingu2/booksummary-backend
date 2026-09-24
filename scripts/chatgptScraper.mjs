@@ -383,26 +383,48 @@ async function scrapeChatGPT(prompt, options) {
 
     // Extract assistant's last message
     const result = await page.evaluate(() => {
-      // ChatGPT assistant messages are identified by [data-message-author-role="assistant"]
+      // 1. Check data-message-author-role="assistant"
       const assistantMessages = document.querySelectorAll('[data-message-author-role="assistant"]');
       if (assistantMessages.length > 0) {
         const lastMsg = assistantMessages[assistantMessages.length - 1];
-        // The markdown container inside
-        const markdownBody = lastMsg.querySelector('.markdown') || lastMsg;
-        return {
-          text: markdownBody.innerText.trim(),
-          html: markdownBody.innerHTML.trim()
-        };
+        const markdownBody = lastMsg.querySelector('.markdown, .prose') || lastMsg;
+        const text = markdownBody.innerText?.trim() || markdownBody.textContent?.trim() || '';
+        if (text) {
+          return {
+            text: text,
+            html: markdownBody.innerHTML?.trim() || text
+          };
+        }
       }
 
-      // Alternative fallback selector
-      const turns = document.querySelectorAll('article');
+      // 2. Modern ChatGPT: article turns
+      const turns = document.querySelectorAll('article, [data-testid^="conversation-turn-"]');
       if (turns.length > 0) {
-        const lastTurn = turns[turns.length - 1];
-        return {
-          text: lastTurn.innerText.trim(),
-          html: lastTurn.innerHTML.trim()
-        };
+        // Find the last assistant turn (usually even turns or turns containing .markdown/.prose)
+        for (let i = turns.length - 1; i >= 0; i--) {
+          const turn = turns[i];
+          const md = turn.querySelector('.markdown, .prose') || turn;
+          const text = md.innerText?.trim() || md.textContent?.trim() || '';
+          if (text) {
+            return {
+              text: text,
+              html: md.innerHTML?.trim() || text
+            };
+          }
+        }
+      }
+
+      // 3. Fallback: all markdown or prose blocks
+      const markdownBlocks = document.querySelectorAll('.markdown, .prose, [class*="agent-turn"]');
+      if (markdownBlocks.length > 0) {
+        const lastBlock = markdownBlocks[markdownBlocks.length - 1];
+        const text = lastBlock.innerText?.trim() || lastBlock.textContent?.trim() || '';
+        if (text) {
+          return {
+            text: text,
+            html: lastBlock.innerHTML?.trim() || text
+          };
+        }
       }
 
       return null;
