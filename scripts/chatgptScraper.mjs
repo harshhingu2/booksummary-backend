@@ -188,8 +188,7 @@ async function launchBrowser(headless = false) {
       '--disable-gpu',
       '--disable-infobars',
       '--window-size=1920,1080',
-      '--disable-blink-features=AutomationControlled',
-      '--disable-features=IsolateOrigins,site-per-process'
+      '--disable-blink-features=AutomationControlled'
     ]
   };
 
@@ -344,7 +343,9 @@ async function handleLoginMode() {
 
   const { browser, page } = await launchBrowser(false);
   try {
-    await page.goto('https://chatgpt.com/', { waitUntil: 'networkidle2', timeout: 60000 });
+    try {
+      await page.goto('https://chatgpt.com/', { waitUntil: 'domcontentloaded', timeout: 45000 });
+    } catch {}
     console.log('\n======================================================');
     console.log('1. Log into your OpenAI / ChatGPT account in the browser.');
     console.log('2. Complete any CAPTCHA / 2FA challenges.');
@@ -406,7 +407,14 @@ async function scrapeChatGPT(prompt, options) {
     }
 
     console.log('[ChatGPT Scraper] Navigating to https://chatgpt.com/ ...');
-    await page.goto('https://chatgpt.com/', { waitUntil: 'networkidle2', timeout: 60000 });
+    try {
+      await page.goto('https://chatgpt.com/', { waitUntil: 'domcontentloaded', timeout: 35000 });
+    } catch (navErr) {
+      console.warn(`[ChatGPT Scraper] Navigation warning: ${navErr.message}. Continuing to inspect page...`);
+    }
+
+    // Give 3.5s for client-side hydration & Turnstile loading
+    await new Promise(r => setTimeout(r, 3500));
     await takeDebugScreenshot(page, '01_after_navigation');
 
     // 1. Check and solve Cloudflare Turnstile if present right after navigation
