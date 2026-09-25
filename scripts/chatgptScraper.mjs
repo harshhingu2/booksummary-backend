@@ -538,44 +538,63 @@ async function scrapeChatGPT(prompt, options) {
 
       // Check if Stop button exists (active streaming)
       const isStopPresent = await page.evaluate(() => {
-        const stopBtn = document.querySelector('button[data-testid="stop-button"], button[aria-label*="Stop"]');
+        const stopBtn = document.querySelector(
+          'button[data-testid="stop-button"], button[aria-label*="Stop"], button[aria-label*="stop"]'
+        );
         return !!stopBtn;
       });
 
-      // Check current text length and completion indicators
+      // Check current text length and completion indicators across all ChatGPT UI versions
       const responseState = await page.evaluate(() => {
         const hasFinishedActionButtons = !!document.querySelector(
-          'article:last-of-type button[aria-label*="Copy"], [data-testid^="conversation-turn-"]:last-of-type button[aria-label*="Copy"], div.agent-turn:last-of-type button[aria-label*="Copy"], section[data-testid^="conversation-turn-"]:last-of-type button[aria-label*="Copy"]'
+          'button[aria-label*="Copy"], button[data-testid*="copy"], button[aria-label*="copy"], button[aria-label*="Read aloud"], button[aria-label*="Good response"]'
         );
 
+        // 1. Check all possible assistant message container variations
         const assistantMsgs = document.querySelectorAll(
-          '[data-message-author-role="assistant"], div[role="assistant"], div.agent-turn, section[data-testid^="conversation-turn-"]'
+          '[data-message-author-role="assistant"], div[role="assistant"], div.agent-turn, section[data-testid^="conversation-turn-"], article[data-testid*="assistant"], div[data-testid*="assistant"]'
         );
         let text = '';
         if (assistantMsgs.length > 0) {
           const last = assistantMsgs[assistantMsgs.length - 1];
-          const md = last.querySelector('.markdown, .prose') || last;
+          const md = last.querySelector('.markdown, .prose, div[class*="markdown"]') || last;
           text = (md.innerText || md.textContent || '').trim();
         }
 
+        // 2. Check prose/markdown elements directly
         if (!text) {
-          const allProse = document.querySelectorAll('.markdown, .prose');
+          const allProse = document.querySelectorAll('.markdown, .prose, div[class*="markdown"], div[class*="prose"]');
           if (allProse.length > 0) {
             const last = allProse[allProse.length - 1];
             text = (last.innerText || last.textContent || '').trim();
           }
         }
 
+        // 3. Check all conversation articles / turns
+        if (!text) {
+          const turns = document.querySelectorAll('article, [data-testid^="conversation-turn-"]');
+          if (turns.length > 0) {
+            const lastTurn = turns[turns.length - 1];
+            // Only if it doesn't look like user turn
+            const isUser = lastTurn.querySelector('[data-message-author-role="user"]') || lastTurn.getAttribute('data-message-author-role') === 'user';
+            if (!isUser) {
+              const md = lastTurn.querySelector('.markdown, .prose') || lastTurn;
+              text = (md.innerText || md.textContent || '').trim();
+            }
+          }
+        }
+
         return {
           length: text.length,
-          hasFinishedActionButtons
+          hasFinishedActionButtons,
+          sampleText: text.slice(0, 80)
         };
       });
 
       const currentTextLength = responseState.length;
 
       // Capture a mid-generation snapshot once tokens start arriving
-      if (!tookGenerationScreenshot && currentTextLength > 10) {
+      if (!tookGenerationScreenshot && currentTextLength > 0) {
         await takeDebugScreenshot(page, '05_during_generation');
         tookGenerationScreenshot = true;
       }
@@ -594,9 +613,12 @@ async function scrapeChatGPT(prompt, options) {
           } else {
             await new Promise(r => setTimeout(r, 2000));
           }
-        } else {
+        } else if (currentTextLength > 0) {
           lastLength = currentTextLength;
           stableCount = 0;
+          await new Promise(r => setTimeout(r, 2000));
+        } else {
+          // If length is still 0, wait and log progress
           await new Promise(r => setTimeout(r, 2000));
         }
       }
@@ -605,16 +627,16 @@ async function scrapeChatGPT(prompt, options) {
     console.log('[ChatGPT Scraper] Response complete. Extracting output...');
     await takeDebugScreenshot(page, '06_generation_complete');
 
-    // Extract assistant's last message
+    // Extract assistant's last message with comprehensive fallbacks
     const result = await page.evaluate(() => {
       // 1. Role assistant, agent-turn, conversation-turn
       const assistantMessages = document.querySelectorAll(
-        '[data-message-author-role="assistant"], div[role="assistant"], div.agent-turn, section[data-testid^="conversation-turn-"]'
+        '[data-message-author-role="assistant"], div[role="assistant"], div.agent-turn, section[data-testid^="conversation-turn-"], article[data-testid*="assistant"], div[data-testid*="assistant"]'
       );
       if (assistantMessages.length > 0) {
         for (let i = assistantMessages.length - 1; i >= 0; i--) {
           const msg = assistantMessages[i];
-          const markdownBody = msg.querySelector('.markdown, .prose') || msg;
+          const markdownBody = msg.querySelector('.markdown, .prose, div[class*="markdown"]') || msg;
           const text = markdownBody.innerText?.trim() || markdownBody.textContent?.trim() || '';
           if (text && text.length > 0) {
             return {
@@ -630,19 +652,22 @@ async function scrapeChatGPT(prompt, options) {
       if (turns.length > 0) {
         for (let i = turns.length - 1; i >= 0; i--) {
           const turn = turns[i];
-          const md = turn.querySelector('.markdown, .prose') || turn;
-          const text = md.innerText?.trim() || md.textContent?.trim() || '';
-          if (text && text.length > 0) {
-            return {
-              text: text,
-              html: md.innerHTML?.trim() || text
-            };
+          const isUser = turn.querySelector('[data-message-author-role="user"]') || turn.getAttribute('data-message-author-role') === 'user';
+          if (!isUser) {
+            const md = turn.querySelector('.markdown, .prose, div[class*="markdown"]') || turn;
+            const text = md.innerText?.trim() || md.textContent?.trim() || '';
+            if (text && text.length > 0) {
+              return {
+                text: text,
+                html: md.innerHTML?.trim() || text
+              };
+            }
           }
         }
       }
 
       // 3. Fallback: all markdown or prose blocks
-      const markdownBlocks = document.querySelectorAll('.markdown, .prose, [class*="agent-turn"]');
+      const markdownBlocks = document.querySelectorAll('.markdown, .prose, div[class*="markdown"], [class*="agent-turn"]');
       if (markdownBlocks.length > 0) {
         const lastBlock = markdownBlocks[markdownBlocks.length - 1];
         const text = lastBlock.innerText?.trim() || lastBlock.textContent?.trim() || '';
