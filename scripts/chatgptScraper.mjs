@@ -90,6 +90,29 @@ async function askQuestion(query) {
   }));
 }
 
+const DEBUG_DIR = path.resolve(__dirname, '../public/debug_screenshots');
+const ROOT_DEBUG_DIR = path.resolve(__dirname, '../debug_screenshots');
+
+async function takeDebugScreenshot(page, stepName) {
+  try {
+    if (!fs.existsSync(DEBUG_DIR)) fs.mkdirSync(DEBUG_DIR, { recursive: true });
+    if (!fs.existsSync(ROOT_DEBUG_DIR)) fs.mkdirSync(ROOT_DEBUG_DIR, { recursive: true });
+
+    const filename = `${stepName}.png`;
+    const targetPath = path.join(DEBUG_DIR, filename);
+    const rootTargetPath = path.join(ROOT_DEBUG_DIR, filename);
+
+    await page.screenshot({ path: targetPath, fullPage: false });
+    try {
+      fs.copyFileSync(targetPath, rootTargetPath);
+    } catch {}
+
+    console.log(`[ChatGPT Scraper Debug] Screenshot saved: ${filename}`);
+  } catch (err) {
+    console.warn(`[ChatGPT Scraper Debug] Could not capture screenshot for ${stepName}:`, err.message);
+  }
+}
+
 async function launchBrowser(headless = false) {
   if (!fs.existsSync(USER_DATA_DIR)) {
     fs.mkdirSync(USER_DATA_DIR, { recursive: true });
@@ -152,18 +175,19 @@ async function launchBrowser(headless = false) {
 
   const chromeExe = findChromeExecutable();
 
+  const isLinux = process.platform === 'linux';
   const launchOptions = {
-    headless: headless ? 'new' : false,
+    headless: headless ? true : false,
     userDataDir: USER_DATA_DIR,
-    defaultViewport: null,
-    protocolTimeout: 300000, // 5 minutes to prevent CDP callFunctionOn timeouts during long streaming
+    defaultViewport: { width: 1920, height: 1080 },
+    protocolTimeout: 180000,
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
       '--disable-dev-shm-usage',
       '--disable-gpu',
       '--disable-infobars',
-      '--start-maximized',
+      '--window-size=1920,1080',
       '--disable-blink-features=AutomationControlled'
     ]
   };
@@ -174,12 +198,12 @@ async function launchBrowser(headless = false) {
 
   const browser = await puppeteer.launch(launchOptions);
 
-
-
   const page = (await browser.pages())[0] || (await browser.newPage());
-  await page.setUserAgent(
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
-  );
+  await page.setViewport({ width: 1920, height: 1080 });
+  const ua = isLinux
+    ? 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
+    : 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+  await page.setUserAgent(ua);
 
   return { browser, page };
 }
@@ -253,6 +277,7 @@ async function scrapeChatGPT(prompt, options) {
 
     console.log('[ChatGPT Scraper] Navigating to https://chatgpt.com/ ...');
     await page.goto('https://chatgpt.com/', { waitUntil: 'networkidle2', timeout: 60000 });
+    await takeDebugScreenshot(page, '01_after_navigation');
 
     // Check if Cloudflare or login wall is shown
     const isLoginPromptVisible = await page.$('button[data-testid="login-button"], a[href*="/login"]');
@@ -266,6 +291,7 @@ async function scrapeChatGPT(prompt, options) {
     const inputSelectorCandidates = [
       '#prompt-textarea',
       'div#prompt-textarea',
+      'div.ProseMirror',
       'div[contenteditable="true"]',
       'div[role="textbox"]',
       'textarea[tabindex="0"]',
@@ -274,10 +300,10 @@ async function scrapeChatGPT(prompt, options) {
     ];
 
     let inputElement = null;
-    for (let attempt = 0; attempt < 3; attempt++) {
+    for (let attempt = 0; attempt < 4; attempt++) {
       for (const selector of inputSelectorCandidates) {
         try {
-          await page.waitForSelector(selector, { timeout: 8000 });
+          await page.waitForSelector(selector, { timeout: 6000 });
           inputElement = await page.$(selector);
           if (inputElement) break;
         } catch {
@@ -285,7 +311,7 @@ async function scrapeChatGPT(prompt, options) {
         }
       }
       if (inputElement) break;
-      await new Promise(r => setTimeout(r, 2000));
+      await new Promise(r => setTimeout(r, 1500));
     }
 
     if (!inputElement) {
@@ -294,67 +320,97 @@ async function scrapeChatGPT(prompt, options) {
     }
 
     if (!inputElement) {
+      await takeDebugScreenshot(page, '99_input_box_not_found');
       throw new Error('Could not find ChatGPT input box. ChatGPT might be presenting a verification challenge or UI updated.');
     }
 
     console.log('[ChatGPT Scraper] Dismissing any overlay dialogs if present...');
     await page.evaluate(() => {
+      // 1. Safe explicit close selectors
       const closeSelectors = [
         'button#onetrust-accept-btn-handler',
         'button[data-testid="close-dialog-button"]',
+        'button[data-testid="close-button"]',
         'button[aria-label="Close"]',
-        'div[role="dialog"] button'
+        'button[aria-label="Dismiss"]',
+        'button[aria-label="Close dialog"]'
       ];
       for (const sel of closeSelectors) {
         document.querySelectorAll(sel).forEach(b => {
           try { b.click(); } catch {}
         });
       }
+
+      // 2. Safe dismiss buttons by text (e.g. "Stay logged out", "Dismiss", "Maybe later", "Not now")
+      // NEVER click all buttons in div[role="dialog"] indiscriminately because that clicks "Log in" or "Sign up"!
+      const safeDismissTexts = ['stay logged out', 'dismiss', 'close', 'maybe later', 'not now', 'decline', 'got it'];
+      document.querySelectorAll('div[role="dialog"] button, div[role="alertdialog"] button, div.modal button').forEach(b => {
+        const txt = (b.innerText || b.textContent || '').trim().toLowerCase();
+        if (safeDismissTexts.includes(txt)) {
+          try { b.click(); } catch {}
+        }
+      });
     });
+    await takeDebugScreenshot(page, '02_after_dialog_dismissal');
 
     console.log('[ChatGPT Scraper] Entering prompt into editor...');
+    // Focus and click inside DOM safely without hanging on coordinate calculation
     await page.evaluate((el) => {
-      el.focus();
+      if (el) {
+        el.focus();
+        try { el.click(); } catch {}
+      }
     }, inputElement);
-    await inputElement.click({ delay: 50 }).catch(() => {});
-    await new Promise(r => setTimeout(r, 400));
+    await new Promise(r => setTimeout(r, 300));
 
-    // Reliable input insertion across React / Lexical editors
-    await page.evaluate((text) => {
+    // Reliable input insertion for ProseMirror & Lexical editors:
+    // Uses document.execCommand('insertText') which cleanly triggers ProseMirror transactions
+    // and enables the submit button without crashing React state.
+    const inserted = await page.evaluate((text) => {
       const el = document.querySelector('#prompt-textarea') || 
+                 document.querySelector('div.ProseMirror') ||
                  document.querySelector('div[contenteditable="true"]') || 
-                 document.querySelector('div[role="textbox"]') || 
                  document.querySelector('textarea');
       if (el) {
         el.focus();
-        if (el.tagName === 'TEXTAREA') {
+        if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
           el.value = text;
           el.dispatchEvent(new Event('input', { bubbles: true }));
           el.dispatchEvent(new Event('change', { bubbles: true }));
+          return true;
         } else {
-          // Lexical editor paragraph nodes
-          el.innerHTML = '';
-          const lines = text.split('\n');
-          for (const line of lines) {
-            const p = document.createElement('p');
-            p.textContent = line.length > 0 ? line : '\u00A0';
-            el.appendChild(p);
+          // For ProseMirror / contenteditable:
+          document.execCommand('selectAll', false, null);
+          const success = document.execCommand('insertText', false, text);
+          if (success) {
+            el.dispatchEvent(new Event('input', { bubbles: true }));
+            return true;
           }
+          // Fallback if execCommand returned false
+          el.innerText = text;
           el.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true, inputType: 'insertText' }));
-          el.dispatchEvent(new Event('change', { bubbles: true }));
+          return true;
         }
       }
+      return false;
     }, prompt);
 
-    console.log('[ChatGPT Scraper] Triggering state update...');
-    // Keystrokes to trigger Lexical React state update and enable the send button
-    await page.keyboard.press('Space');
-    await new Promise(r => setTimeout(r, 100));
-    await page.keyboard.press('Backspace');
-    await new Promise(r => setTimeout(r, 500));
+    if (!inserted) {
+      // Fallback: CDP Input.insertText
+      try {
+        const client = await page.target().createCDPSession();
+        await client.send('Input.insertText', { text: prompt });
+      } catch (cdpErr) {
+        console.warn('[ChatGPT Scraper] CDP insertText fallback failed:', cdpErr.message);
+      }
+    }
+
+    await takeDebugScreenshot(page, '03_after_prompt_typed');
 
     console.log('[ChatGPT Scraper] Submitting prompt...');
-    // Look for send button or press Enter
+    await new Promise(r => setTimeout(r, 600));
+
+    // Look for send button (or wait briefly up to 4s for it to become enabled)
     const sendButtonSelectorCandidates = [
       'button[data-testid="send-button"]',
       'button[aria-label*="Send"]',
@@ -364,28 +420,31 @@ async function scrapeChatGPT(prompt, options) {
     ];
 
     let clicked = false;
-    for (const btnSelector of sendButtonSelectorCandidates) {
-      try {
-        const btn = await page.$(btnSelector);
-        if (btn) {
-          const isDisabled = await page.evaluate(b => b.disabled || b.getAttribute('aria-disabled') === 'true', btn);
-          if (!isDisabled) {
-            // Click natively via DOM evaluate so it never hangs on coordinate hit-testing
-            await page.evaluate(b => b.click(), btn);
-            clicked = true;
-            console.log(`[ChatGPT Scraper] Clicked send button via selector: ${btnSelector}`);
-            break;
+    for (let waitSec = 0; waitSec < 8; waitSec++) {
+      for (const btnSelector of sendButtonSelectorCandidates) {
+        try {
+          const btn = await page.$(btnSelector);
+          if (btn) {
+            const isDisabled = await page.evaluate(b => b.disabled || b.getAttribute('aria-disabled') === 'true', btn);
+            if (!isDisabled) {
+              await page.evaluate(b => b.click(), btn);
+              clicked = true;
+              console.log(`[ChatGPT Scraper] Clicked send button via selector: ${btnSelector}`);
+              break;
+            }
           }
-        }
-      } catch {
-        // continue
+        } catch {}
       }
+      if (clicked) break;
+      await new Promise(r => setTimeout(r, 500));
     }
 
     if (!clicked) {
       console.log('[ChatGPT Scraper] Send button not enabled, falling back to Enter key...');
       await page.keyboard.press('Enter');
     }
+
+    await takeDebugScreenshot(page, '04_after_send_clicked');
 
     console.log('[ChatGPT Scraper] Prompt sent! Waiting for response to generate...');
 
@@ -396,9 +455,11 @@ async function scrapeChatGPT(prompt, options) {
     let isGenerating = true;
     let lastLength = 0;
     let stableCount = 0;
+    let tookGenerationScreenshot = false;
 
     while (isGenerating) {
       if (Date.now() - startTime > options.timeout) {
+        await takeDebugScreenshot(page, '99_timeout_error');
         throw new Error(`Timeout after ${options.timeout / 1000}s waiting for ChatGPT response.`);
       }
 
@@ -408,38 +469,56 @@ async function scrapeChatGPT(prompt, options) {
         return !!stopBtn;
       });
 
-      // Check current text length of the latest response
-      const currentTextLength = await page.evaluate(() => {
-        const assistantMsgs = document.querySelectorAll('[data-message-author-role="assistant"]');
+      // Check current text length and completion indicators
+      const responseState = await page.evaluate(() => {
+        // Look for copy button or action buttons on the latest message (indicates finished generation)
+        const hasFinishedActionButtons = !!document.querySelector(
+          'article:last-of-type button[aria-label*="Copy"], [data-testid^="conversation-turn-"]:last-of-type button[aria-label*="Copy"], div.agent-turn:last-of-type button[aria-label*="Copy"], section[data-testid^="conversation-turn-"]:last-of-type button[aria-label*="Copy"]'
+        );
+
+        // Check modern ChatGPT role="assistant" or .agent-turn or .markdown.prose
+        const assistantMsgs = document.querySelectorAll(
+          '[data-message-author-role="assistant"], div[role="assistant"], div.agent-turn, section[data-testid^="conversation-turn-"]'
+        );
+        let text = '';
         if (assistantMsgs.length > 0) {
           const last = assistantMsgs[assistantMsgs.length - 1];
           const md = last.querySelector('.markdown, .prose') || last;
-          return (md.innerText || md.textContent || '').trim().length;
+          text = (md.innerText || md.textContent || '').trim();
         }
 
-        const turns = document.querySelectorAll('article, [data-testid^="conversation-turn-"]');
-        if (turns.length > 1) {
-          const lastTurn = turns[turns.length - 1];
-          const md = lastTurn.querySelector('.markdown, .prose') || lastTurn;
-          return (md.innerText || md.textContent || '').trim().length;
+        if (!text) {
+          const allProse = document.querySelectorAll('.markdown, .prose');
+          if (allProse.length > 0) {
+            const last = allProse[allProse.length - 1];
+            text = (last.innerText || last.textContent || '').trim();
+          }
         }
 
-        const allProse = document.querySelectorAll('.markdown, .prose');
-        if (allProse.length > 0) {
-          const last = allProse[allProse.length - 1];
-          return (last.innerText || last.textContent || '').trim().length;
-        }
-
-        return 0;
+        return {
+          length: text.length,
+          hasFinishedActionButtons
+        };
       });
+
+      const currentTextLength = responseState.length;
+
+      // Capture a mid-generation snapshot once tokens start arriving
+      if (!tookGenerationScreenshot && currentTextLength > 10) {
+        await takeDebugScreenshot(page, '05_during_generation');
+        tookGenerationScreenshot = true;
+      }
 
       if (isStopPresent) {
         stableCount = 0;
         lastLength = currentTextLength;
         await new Promise(r => setTimeout(r, 2000));
       } else {
-        // Stop button is gone. Check if content has stopped changing and has substantial length (> 50 chars)
-        if (currentTextLength > 50 && currentTextLength === lastLength) {
+        // Stop button is gone.
+        // If finished action buttons (like Copy) are present and length > 0, generation is complete!
+        if (responseState.hasFinishedActionButtons && currentTextLength > 0) {
+          isGenerating = false;
+        } else if (currentTextLength > 0 && currentTextLength === lastLength) {
           stableCount++;
           // Require at least 2 consecutive stable checks (~4s) to guarantee completion
           if (stableCount >= 2) {
@@ -456,20 +535,25 @@ async function scrapeChatGPT(prompt, options) {
     }
 
     console.log('[ChatGPT Scraper] Response complete. Extracting output...');
+    await takeDebugScreenshot(page, '06_generation_complete');
 
     // Extract assistant's last message
     const result = await page.evaluate(() => {
-      // 1. Check data-message-author-role="assistant"
-      const assistantMessages = document.querySelectorAll('[data-message-author-role="assistant"]');
+      // 1. Role assistant, agent-turn, conversation-turn
+      const assistantMessages = document.querySelectorAll(
+        '[data-message-author-role="assistant"], div[role="assistant"], div.agent-turn, section[data-testid^="conversation-turn-"]'
+      );
       if (assistantMessages.length > 0) {
-        const lastMsg = assistantMessages[assistantMessages.length - 1];
-        const markdownBody = lastMsg.querySelector('.markdown, .prose') || lastMsg;
-        const text = markdownBody.innerText?.trim() || markdownBody.textContent?.trim() || '';
-        if (text) {
-          return {
-            text: text,
-            html: markdownBody.innerHTML?.trim() || text
-          };
+        for (let i = assistantMessages.length - 1; i >= 0; i--) {
+          const msg = assistantMessages[i];
+          const markdownBody = msg.querySelector('.markdown, .prose') || msg;
+          const text = markdownBody.innerText?.trim() || markdownBody.textContent?.trim() || '';
+          if (text && text.length > 0) {
+            return {
+              text: text,
+              html: markdownBody.innerHTML?.trim() || text
+            };
+          }
         }
       }
 
@@ -480,7 +564,7 @@ async function scrapeChatGPT(prompt, options) {
           const turn = turns[i];
           const md = turn.querySelector('.markdown, .prose') || turn;
           const text = md.innerText?.trim() || md.textContent?.trim() || '';
-          if (text && text.length > 20) {
+          if (text && text.length > 0) {
             return {
               text: text,
               html: md.innerHTML?.trim() || text
@@ -494,7 +578,7 @@ async function scrapeChatGPT(prompt, options) {
       if (markdownBlocks.length > 0) {
         const lastBlock = markdownBlocks[markdownBlocks.length - 1];
         const text = lastBlock.innerText?.trim() || lastBlock.textContent?.trim() || '';
-        if (text) {
+        if (text && text.length > 0) {
           return {
             text: text,
             html: lastBlock.innerHTML?.trim() || text
@@ -506,6 +590,7 @@ async function scrapeChatGPT(prompt, options) {
     });
 
     if (!result || !result.text) {
+      await takeDebugScreenshot(page, '99_parsing_failure');
       throw new Error('Failed to parse ChatGPT response content from the page.');
     }
 
@@ -522,13 +607,7 @@ async function scrapeChatGPT(prompt, options) {
     return result;
   } catch (err) {
     console.error(`\n[ChatGPT Scraper Error] ${err.message}`);
-    try {
-      const debugScreenshotPath = path.resolve(process.cwd(), 'chatgpt_scraper_error.png');
-      await page.screenshot({ path: debugScreenshotPath });
-      console.log(`[ChatGPT Scraper] Debug screenshot saved to ${debugScreenshotPath}`);
-    } catch {
-      // ignore screenshot failure
-    }
+    await takeDebugScreenshot(page, '99_error_state');
     throw err;
   } finally {
     await browser.close();

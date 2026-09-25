@@ -45,4 +45,6 @@ next-env.d.ts
 .deepseek_profile/
 chatgpt_scraper_error.png
 deepseek_scraper_error.png
+debug_screenshots/
+public/debug_screenshots/
 
