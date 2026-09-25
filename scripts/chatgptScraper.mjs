@@ -351,6 +351,14 @@ async function scrapeChatGPT(prompt, options) {
     process.exit(1);
   }
 
+  // Clean up any stale profile directory before headless run so it always starts fresh
+  if (fs.existsSync(USER_DATA_DIR)) {
+    try {
+      fs.rmSync(USER_DATA_DIR, { recursive: true, force: true });
+      console.log('[ChatGPT Scraper] Cleared stale profile cache (.chatgpt_profile)');
+    } catch {}
+  }
+
   console.log(`[ChatGPT Scraper] Launching browser (headless: ${options.headless})...`);
   const { browser, page } = await launchBrowser(options.headless, false);
 
@@ -703,7 +711,15 @@ async function scrapeChatGPT(prompt, options) {
     await takeDebugScreenshot(page, '99_error_state');
     throw err;
   } finally {
-    await browser.close();
+    try {
+      await browser.close();
+    } catch {}
+    // Clean up temporary profile cache if created
+    if (fs.existsSync(USER_DATA_DIR)) {
+      try {
+        fs.rmSync(USER_DATA_DIR, { recursive: true, force: true });
+      } catch {}
+    }
   }
 }
 
