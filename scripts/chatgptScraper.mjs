@@ -90,28 +90,6 @@ async function askQuestion(query) {
   }));
 }
 
-const DEBUG_DIR = path.resolve(__dirname, '../public/debug_screenshots');
-const ROOT_DEBUG_DIR = path.resolve(__dirname, '../debug_screenshots');
-
-async function takeDebugScreenshot(page, stepName) {
-  try {
-    if (!fs.existsSync(DEBUG_DIR)) fs.mkdirSync(DEBUG_DIR, { recursive: true });
-    if (!fs.existsSync(ROOT_DEBUG_DIR)) fs.mkdirSync(ROOT_DEBUG_DIR, { recursive: true });
-
-    const filename = `${stepName}.png`;
-    const targetPath = path.join(DEBUG_DIR, filename);
-    const rootTargetPath = path.join(ROOT_DEBUG_DIR, filename);
-
-    await page.screenshot({ path: targetPath, fullPage: false });
-    try {
-      fs.copyFileSync(targetPath, rootTargetPath);
-    } catch {}
-
-    console.log(`[ChatGPT Scraper Debug] Screenshot saved: ${filename}`);
-  } catch (err) {
-    console.warn(`[ChatGPT Scraper Debug] Could not capture screenshot for ${stepName}:`, err.message);
-  }
-}
 
 async function launchBrowser(headless = false, useProfile = false) {
   function findChromeExecutable() {
@@ -228,7 +206,6 @@ async function handleCloudflareChallenge(page) {
     if (!isChallengePresent) return true;
 
     console.log('[ChatGPT Scraper] Cloudflare "Verify you are human" challenge detected!');
-    await takeDebugScreenshot(page, 'cloudflare_turnstile_detected');
 
     // Attempt to click the Turnstile checkbox up to 6 times
     for (let attempt = 1; attempt <= 6; attempt++) {
@@ -289,7 +266,6 @@ async function handleCloudflareChallenge(page) {
       const inputFound = await page.$('#prompt-textarea, div.ProseMirror, textarea, textarea#mobile-composer-prompt');
       if (inputFound) {
         console.log('[ChatGPT Scraper] Cloudflare Turnstile successfully solved!');
-        await takeDebugScreenshot(page, 'cloudflare_turnstile_passed');
 
         // Save fresh cookies back to chatgpt_cookies.json
         try {
@@ -395,7 +371,6 @@ async function scrapeChatGPT(prompt, options) {
 
     // Give time for client-side hydration & Turnstile loading
     await new Promise(r => setTimeout(r, 4000));
-    await takeDebugScreenshot(page, '01_after_navigation');
 
     // 1. Check and solve Cloudflare Turnstile if present right after navigation
     await handleCloudflareChallenge(page);
@@ -429,7 +404,6 @@ async function scrapeChatGPT(prompt, options) {
     }
 
     if (!inputElement) {
-      await takeDebugScreenshot(page, '99_input_box_not_found');
       throw new Error('Could not find ChatGPT input box. ChatGPT might be presenting an unresolved verification challenge or UI updated.');
     }
 
@@ -459,7 +433,6 @@ async function scrapeChatGPT(prompt, options) {
         }
       });
     });
-    await takeDebugScreenshot(page, '02_after_dialog_dismissal');
 
     console.log('[ChatGPT Scraper] Entering prompt into editor...');
     // Focus the visible editable ProseMirror or prompt element (ignoring hidden fallback textareas)
@@ -484,8 +457,6 @@ async function scrapeChatGPT(prompt, options) {
     } catch {
       await page.keyboard.type(prompt, { delay: 2 });
     }
-
-    await takeDebugScreenshot(page, '03_after_prompt_typed');
 
     console.log('[ChatGPT Scraper] Submitting prompt...');
     await new Promise(r => setTimeout(r, 600));
@@ -525,8 +496,6 @@ async function scrapeChatGPT(prompt, options) {
       await page.keyboard.press('Enter');
     }
 
-    await takeDebugScreenshot(page, '04_after_send_clicked');
-
     console.log('[ChatGPT Scraper] Prompt sent! Waiting for response to generate...');
 
     // Wait at least 4 seconds for generation to commence and render first tokens
@@ -536,11 +505,9 @@ async function scrapeChatGPT(prompt, options) {
     let isGenerating = true;
     let lastLength = 0;
     let stableCount = 0;
-    let tookGenerationScreenshot = false;
 
     while (isGenerating) {
       if (Date.now() - startTime > options.timeout) {
-        await takeDebugScreenshot(page, '99_timeout_error');
         throw new Error(`Timeout after ${options.timeout / 1000}s waiting for ChatGPT response.`);
       }
 
@@ -558,9 +525,9 @@ async function scrapeChatGPT(prompt, options) {
           'button[aria-label*="Copy"], button[data-testid*="copy"], button[aria-label*="copy"], button[aria-label*="Read aloud"], button[aria-label*="Good response"]'
         );
 
-        // 1. Check all possible assistant message container variations
+        // 1. Check all assistant messages explicitly
         const assistantMsgs = document.querySelectorAll(
-          '[data-message-author-role="assistant"], div[role="assistant"], div.agent-turn, section[data-testid^="conversation-turn-"], article[data-testid*="assistant"], div[data-testid*="assistant"]'
+          '[data-message-author-role="assistant"], div[role="assistant"], div.agent-turn, article[data-testid*="assistant"], div[data-testid*="assistant"]'
         );
         let text = '';
         if (assistantMsgs.length > 0) {
@@ -569,25 +536,21 @@ async function scrapeChatGPT(prompt, options) {
           text = (md.innerText || md.textContent || '').trim();
         }
 
-        // 2. Check prose/markdown elements directly
-        if (!text) {
-          const allProse = document.querySelectorAll('.markdown, .prose, div[class*="markdown"], div[class*="prose"]');
-          if (allProse.length > 0) {
-            const last = allProse[allProse.length - 1];
-            text = (last.innerText || last.textContent || '').trim();
-          }
-        }
-
-        // 3. Check all conversation articles / turns
+        // 2. Check conversation turns from bottom up that are NOT user turns
         if (!text) {
           const turns = document.querySelectorAll('article, [data-testid^="conversation-turn-"]');
-          if (turns.length > 0) {
-            const lastTurn = turns[turns.length - 1];
-            // Only if it doesn't look like user turn
-            const isUser = lastTurn.querySelector('[data-message-author-role="user"]') || lastTurn.getAttribute('data-message-author-role') === 'user';
+          for (let i = turns.length - 1; i >= 0; i--) {
+            const turn = turns[i];
+            const isUser = !!turn.querySelector('[data-message-author-role="user"]') ||
+                           turn.getAttribute('data-message-author-role') === 'user' ||
+                           !!turn.querySelector('div[data-testid="user-turn"]');
             if (!isUser) {
-              const md = lastTurn.querySelector('.markdown, .prose') || lastTurn;
-              text = (md.innerText || md.textContent || '').trim();
+              const md = turn.querySelector('.markdown, .prose, div[class*="markdown"]') || turn;
+              const extracted = (md.innerText || md.textContent || '').trim();
+              if (extracted) {
+                text = extracted;
+                break;
+              }
             }
           }
         }
@@ -600,12 +563,6 @@ async function scrapeChatGPT(prompt, options) {
       });
 
       const currentTextLength = responseState.length;
-
-      // Capture a mid-generation snapshot once tokens start arriving
-      if (!tookGenerationScreenshot && currentTextLength > 0) {
-        await takeDebugScreenshot(page, '05_during_generation');
-        tookGenerationScreenshot = true;
-      }
 
       if (isStopPresent) {
         stableCount = 0;
@@ -633,13 +590,12 @@ async function scrapeChatGPT(prompt, options) {
     }
 
     console.log('[ChatGPT Scraper] Response complete. Extracting output...');
-    await takeDebugScreenshot(page, '06_generation_complete');
 
     // Extract assistant's last message with comprehensive fallbacks
     const result = await page.evaluate(() => {
       // 1. Role assistant, agent-turn, conversation-turn
       const assistantMessages = document.querySelectorAll(
-        '[data-message-author-role="assistant"], div[role="assistant"], div.agent-turn, section[data-testid^="conversation-turn-"], article[data-testid*="assistant"], div[data-testid*="assistant"]'
+        '[data-message-author-role="assistant"], div[role="assistant"], div.agent-turn, article[data-testid*="assistant"], div[data-testid*="assistant"]'
       );
       if (assistantMessages.length > 0) {
         for (let i = assistantMessages.length - 1; i >= 0; i--) {
@@ -655,12 +611,14 @@ async function scrapeChatGPT(prompt, options) {
         }
       }
 
-      // 2. Modern ChatGPT: article turns
+      // 2. Modern ChatGPT: article turns (bottom-up, skip user messages)
       const turns = document.querySelectorAll('article, [data-testid^="conversation-turn-"]');
       if (turns.length > 0) {
         for (let i = turns.length - 1; i >= 0; i--) {
           const turn = turns[i];
-          const isUser = turn.querySelector('[data-message-author-role="user"]') || turn.getAttribute('data-message-author-role') === 'user';
+          const isUser = !!turn.querySelector('[data-message-author-role="user"]') ||
+                         turn.getAttribute('data-message-author-role') === 'user' ||
+                         !!turn.querySelector('div[data-testid="user-turn"]');
           if (!isUser) {
             const md = turn.querySelector('.markdown, .prose, div[class*="markdown"]') || turn;
             const text = md.innerText?.trim() || md.textContent?.trim() || '';
@@ -674,16 +632,18 @@ async function scrapeChatGPT(prompt, options) {
         }
       }
 
-      // 3. Fallback: all markdown or prose blocks
-      const markdownBlocks = document.querySelectorAll('.markdown, .prose, div[class*="markdown"], [class*="agent-turn"]');
-      if (markdownBlocks.length > 0) {
-        const lastBlock = markdownBlocks[markdownBlocks.length - 1];
-        const text = lastBlock.innerText?.trim() || lastBlock.textContent?.trim() || '';
-        if (text && text.length > 0) {
-          return {
-            text: text,
-            html: lastBlock.innerHTML?.trim() || text
-          };
+      // 3. Fallback: markdown blocks not inside user container
+      const markdownBlocks = document.querySelectorAll('.markdown, .prose, div[class*="markdown"]');
+      for (let i = markdownBlocks.length - 1; i >= 0; i--) {
+        const block = markdownBlocks[i];
+        if (!block.closest('[data-message-author-role="user"]') && !block.closest('div[data-testid="user-turn"]')) {
+          const text = block.innerText?.trim() || block.textContent?.trim() || '';
+          if (text && text.length > 0) {
+            return {
+              text: text,
+              html: block.innerHTML?.trim() || text
+            };
+          }
         }
       }
 
@@ -691,7 +651,6 @@ async function scrapeChatGPT(prompt, options) {
     });
 
     if (!result || !result.text) {
-      await takeDebugScreenshot(page, '99_parsing_failure');
       throw new Error('Failed to parse ChatGPT response content from the page.');
     }
 
@@ -708,7 +667,6 @@ async function scrapeChatGPT(prompt, options) {
     return result;
   } catch (err) {
     console.error(`\n[ChatGPT Scraper Error] ${err.message}`);
-    await takeDebugScreenshot(page, '99_error_state');
     throw err;
   } finally {
     try {
