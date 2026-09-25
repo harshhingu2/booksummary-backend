@@ -17,7 +17,7 @@ function parseArgs() {
   const options = {
     login: false,
     prompt: '',
-    headless: false, // Default to visible for stability with Cloudflare & interactive use
+    headless: false,
     timeout: 180000,
     output: null,
     help: false
@@ -113,13 +113,8 @@ async function takeDebugScreenshot(page, stepName) {
   }
 }
 
-async function launchBrowser(headless = false) {
-  if (!fs.existsSync(USER_DATA_DIR)) {
-    fs.mkdirSync(USER_DATA_DIR, { recursive: true });
-  }
-
+async function launchBrowser(headless = false, useProfile = false) {
   function findChromeExecutable() {
-    // 0. Environment variables
     if (process.env.PUPPETEER_EXECUTABLE_PATH && fs.existsSync(process.env.PUPPETEER_EXECUTABLE_PATH)) {
       return process.env.PUPPETEER_EXECUTABLE_PATH;
     }
@@ -127,7 +122,6 @@ async function launchBrowser(headless = false) {
       return process.env.CHROME_BIN;
     }
 
-    // 1. System Chrome / Chromium locations (Windows + Linux VPS)
     const fallbackPaths = [
       '/usr/bin/google-chrome-stable',
       '/usr/bin/google-chrome',
@@ -142,7 +136,6 @@ async function launchBrowser(headless = false) {
     const systemChrome = fallbackPaths.find(p => fs.existsSync(p));
     if (systemChrome) return systemChrome;
 
-    // 2. Check puppeteer cache directory for any installed chrome binary
     const homeDir = process.env.HOME || process.env.USERPROFILE || '';
     const cacheDir = homeDir ? path.join(homeDir, '.cache', 'puppeteer') : null;
     if (cacheDir && fs.existsSync(cacheDir)) {
@@ -159,9 +152,7 @@ async function launchBrowser(headless = false) {
               results.push(fullPath);
             }
           }
-        } catch {
-          // ignore read errors
-        }
+        } catch {}
         return results;
       };
       const found = walkSync(cacheDir);
@@ -174,11 +165,10 @@ async function launchBrowser(headless = false) {
   }
 
   const chromeExe = findChromeExecutable();
-
   const isLinux = process.platform === 'linux';
+
   const launchOptions = {
     headless: headless ? true : false,
-    userDataDir: USER_DATA_DIR,
     defaultViewport: { width: 1920, height: 1080 },
     protocolTimeout: 180000,
     args: [
@@ -192,48 +182,31 @@ async function launchBrowser(headless = false) {
     ]
   };
 
+  // Only use persistent profile directory when explicitly requested (e.g. during --login)
+  // For headless scraping, using a clean profile with fresh session cookies prevents Cloudflare device-fingerprint bans.
+  if (useProfile) {
+    if (!fs.existsSync(USER_DATA_DIR)) {
+      fs.mkdirSync(USER_DATA_DIR, { recursive: true });
+    }
+    launchOptions.userDataDir = USER_DATA_DIR;
+  }
+
   if (chromeExe) {
     launchOptions.executablePath = chromeExe;
   }
 
   const browser = await puppeteer.launch(launchOptions);
-
   const page = (await browser.pages())[0] || (await browser.newPage());
   await page.setViewport({ width: 1920, height: 1080 });
+
   const ua = isLinux
     ? 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36'
     : 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36';
   await page.setUserAgent(ua);
 
-  // Stealth evasions for datacenter VPS environments
-  await page.evaluateOnNewDocument(() => {
-    // 1. Hide webdriver flag
-    Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-    // 2. Mock plugins
-    Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
-    // 3. Mock languages
-    Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
-    // 4. Disguise Linux VPS SwiftShader/llvmpipe WebGL to look like real desktop GPU
-    try {
-      const getParameter = WebGLRenderingContext.prototype.getParameter;
-      WebGLRenderingContext.prototype.getParameter = function (parameter) {
-        if (parameter === 37445) return 'Google Inc. (NVIDIA)';
-        if (parameter === 37446) return 'ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Direct3D11 vs_5_0 ps_5_0, D3D11)';
-        return getParameter.apply(this, [parameter]);
-      };
-      if (window.WebGL2RenderingContext) {
-        const getParameter2 = WebGL2RenderingContext.prototype.getParameter;
-        WebGL2RenderingContext.prototype.getParameter = function (parameter) {
-          if (parameter === 37445) return 'Google Inc. (NVIDIA)';
-          if (parameter === 37446) return 'ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Direct3D11 vs_5_0 ps_5_0, D3D11)';
-          return getParameter2.apply(this, [parameter]);
-        };
-      }
-    } catch {}
-    // 5. Ensure window.chrome runtime exists
-    if (!window.chrome) {
-      window.chrome = { runtime: {} };
-    }
+  // Attach diagnostic error listeners
+  page.on('pageerror', err => {
+    console.warn(`[ChatGPT Scraper PageError] ${err.message.slice(0, 160)}`);
   });
 
   return { browser, page };
@@ -297,7 +270,6 @@ async function handleCloudflareChallenge(page) {
         for (const iframe of iframes) {
           const box = await iframe.boundingBox();
           if (box && box.width > 0 && box.height > 0) {
-            // Checkbox is ~28px from left edge, vertically centered in the 65px widget
             const clickX = box.x + Math.min(28, box.width * 0.15);
             const clickY = box.y + (box.height / 2);
             await page.mouse.move(clickX, clickY, { steps: 5 });
@@ -314,7 +286,7 @@ async function handleCloudflareChallenge(page) {
       await new Promise(r => setTimeout(r, 3500));
 
       // Check if prompt textarea appeared
-      const inputFound = await page.$('#prompt-textarea, div.ProseMirror, textarea');
+      const inputFound = await page.$('#prompt-textarea, div.ProseMirror, textarea, textarea#mobile-composer-prompt');
       if (inputFound) {
         console.log('[ChatGPT Scraper] Cloudflare Turnstile successfully solved!');
         await takeDebugScreenshot(page, 'cloudflare_turnstile_passed');
@@ -341,7 +313,7 @@ async function handleLoginMode() {
   console.log('\n[ChatGPT Scraper] Launching browser for manual login...');
   console.log(`[ChatGPT Scraper] Using persistent profile directory: ${USER_DATA_DIR}`);
 
-  const { browser, page } = await launchBrowser(false);
+  const { browser, page } = await launchBrowser(false, true);
   try {
     try {
       await page.goto('https://chatgpt.com/', { waitUntil: 'domcontentloaded', timeout: 45000 });
@@ -380,7 +352,7 @@ async function scrapeChatGPT(prompt, options) {
   }
 
   console.log(`[ChatGPT Scraper] Launching browser (headless: ${options.headless})...`);
-  const { browser, page } = await launchBrowser(options.headless);
+  const { browser, page } = await launchBrowser(options.headless, false);
 
   try {
     // Load session cookies if exported
@@ -413,60 +385,39 @@ async function scrapeChatGPT(prompt, options) {
       console.warn(`[ChatGPT Scraper] Navigation warning: ${navErr.message}. Continuing to inspect page...`);
     }
 
-    // Give 3.5s for client-side hydration & Turnstile loading
-    await new Promise(r => setTimeout(r, 3500));
+    // Give time for client-side hydration & Turnstile loading
+    await new Promise(r => setTimeout(r, 4000));
     await takeDebugScreenshot(page, '01_after_navigation');
 
     // 1. Check and solve Cloudflare Turnstile if present right after navigation
     await handleCloudflareChallenge(page);
 
-    // Check if Cloudflare or login wall is shown
+    // Check if login wall is shown
     const isLoginPromptVisible = await page.$('button[data-testid="login-button"], a[href*="/login"]');
     if (isLoginPromptVisible) {
       console.warn('\n[Warning] It seems you are not logged in. ChatGPT may limit requests or prompt for login.');
       console.warn('Consider running: node scripts/chatgptScraper.mjs --login\n');
     }
 
-    // Wait for the prompt input area
+    // Wait for prompt input area across all modern ChatGPT UI variations
     console.log('[ChatGPT Scraper] Waiting for prompt input area...');
-    const inputSelectorCandidates = [
-      '#prompt-textarea',
-      'div#prompt-textarea',
-      'div.ProseMirror',
-      'div[contenteditable="true"]',
-      'div[role="textbox"]',
-      'textarea[tabindex="0"]',
-      'textarea[placeholder*="Ask ChatGPT"]',
-      '[data-placeholder*="Ask ChatGPT"]'
-    ];
+    const combinedInputSelector = '#prompt-textarea, div.ProseMirror, textarea[placeholder*="Ask"], textarea#mobile-composer-prompt, textarea.wcDTda_fallbackTextarea, div[contenteditable="true"], textarea';
 
     let inputElement = null;
-    for (let attempt = 0; attempt < 6; attempt++) {
-      for (const selector of inputSelectorCandidates) {
-        try {
-          await page.waitForSelector(selector, { timeout: 4000 });
-          inputElement = await page.$(selector);
-          if (inputElement) break;
-        } catch {
-          // try next
-        }
-      }
-      if (inputElement) break;
+    for (let attempt = 0; attempt < 8; attempt++) {
+      try {
+        await page.waitForSelector(combinedInputSelector, { timeout: 3500 });
+        inputElement = await page.$(combinedInputSelector);
+        if (inputElement) break;
+      } catch {}
 
       // If not found yet, check if Turnstile challenge appeared
       await handleCloudflareChallenge(page);
-      await new Promise(r => setTimeout(r, 1500));
+      await new Promise(r => setTimeout(r, 1000));
     }
 
     if (!inputElement) {
-      // Last resort: evaluate any contenteditable or textarea on page
-      inputElement = await page.$('div[contenteditable="true"], textarea');
-    }
-
-    // If still not found, try one final Cloudflare check
-    if (!inputElement) {
-      await handleCloudflareChallenge(page);
-      inputElement = await page.$('#prompt-textarea, div.ProseMirror, div[contenteditable="true"], textarea');
+      inputElement = await page.$('textarea, div[contenteditable="true"]');
     }
 
     if (!inputElement) {
@@ -491,8 +442,7 @@ async function scrapeChatGPT(prompt, options) {
         });
       }
 
-      // 2. Safe dismiss buttons by text (e.g. "Stay logged out", "Dismiss", "Maybe later", "Not now")
-      // NEVER click all buttons in div[role="dialog"] indiscriminately because that clicks "Log in" or "Sign up"!
+      // 2. Safe dismiss buttons by text
       const safeDismissTexts = ['stay logged out', 'dismiss', 'close', 'maybe later', 'not now', 'decline', 'got it'];
       document.querySelectorAll('div[role="dialog"] button, div[role="alertdialog"] button, div.modal button').forEach(b => {
         const txt = (b.innerText || b.textContent || '').trim().toLowerCase();
@@ -504,7 +454,6 @@ async function scrapeChatGPT(prompt, options) {
     await takeDebugScreenshot(page, '02_after_dialog_dismissal');
 
     console.log('[ChatGPT Scraper] Entering prompt into editor...');
-    // Focus and click inside DOM safely without hanging on coordinate calculation
     await page.evaluate((el) => {
       if (el) {
         el.focus();
@@ -513,14 +462,12 @@ async function scrapeChatGPT(prompt, options) {
     }, inputElement);
     await new Promise(r => setTimeout(r, 300));
 
-    // Reliable input insertion for ProseMirror & Lexical editors:
-    // Uses document.execCommand('insertText') which cleanly triggers ProseMirror transactions
-    // and enables the submit button without crashing React state.
+    // Reliable input insertion for Textarea, ProseMirror, & Lexical editors
     const inserted = await page.evaluate((text) => {
       const el = document.querySelector('#prompt-textarea') || 
+                 document.querySelector('textarea') ||
                  document.querySelector('div.ProseMirror') ||
-                 document.querySelector('div[contenteditable="true"]') || 
-                 document.querySelector('textarea');
+                 document.querySelector('div[contenteditable="true"]');
       if (el) {
         el.focus();
         if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
@@ -529,14 +476,12 @@ async function scrapeChatGPT(prompt, options) {
           el.dispatchEvent(new Event('change', { bubbles: true }));
           return true;
         } else {
-          // For ProseMirror / contenteditable:
           document.execCommand('selectAll', false, null);
           const success = document.execCommand('insertText', false, text);
           if (success) {
             el.dispatchEvent(new Event('input', { bubbles: true }));
             return true;
           }
-          // Fallback if execCommand returned false
           el.innerText = text;
           el.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true, inputType: 'insertText' }));
           return true;
@@ -546,7 +491,6 @@ async function scrapeChatGPT(prompt, options) {
     }, prompt);
 
     if (!inserted) {
-      // Fallback: CDP Input.insertText
       try {
         const client = await page.target().createCDPSession();
         await client.send('Input.insertText', { text: prompt });
@@ -564,6 +508,7 @@ async function scrapeChatGPT(prompt, options) {
     const sendButtonSelectorCandidates = [
       'button[data-testid="send-button"]',
       'button[aria-label*="Send"]',
+      'button[aria-label*="submit"]',
       '#composer-submit-button',
       'button[data-testid="composer-speech-button"] + button',
       'form button[type="submit"]'
@@ -621,12 +566,10 @@ async function scrapeChatGPT(prompt, options) {
 
       // Check current text length and completion indicators
       const responseState = await page.evaluate(() => {
-        // Look for copy button or action buttons on the latest message (indicates finished generation)
         const hasFinishedActionButtons = !!document.querySelector(
           'article:last-of-type button[aria-label*="Copy"], [data-testid^="conversation-turn-"]:last-of-type button[aria-label*="Copy"], div.agent-turn:last-of-type button[aria-label*="Copy"], section[data-testid^="conversation-turn-"]:last-of-type button[aria-label*="Copy"]'
         );
 
-        // Check modern ChatGPT role="assistant" or .agent-turn or .markdown.prose
         const assistantMsgs = document.querySelectorAll(
           '[data-message-author-role="assistant"], div[role="assistant"], div.agent-turn, section[data-testid^="conversation-turn-"]'
         );
@@ -664,13 +607,10 @@ async function scrapeChatGPT(prompt, options) {
         lastLength = currentTextLength;
         await new Promise(r => setTimeout(r, 2000));
       } else {
-        // Stop button is gone.
-        // If finished action buttons (like Copy) are present and length > 0, generation is complete!
         if (responseState.hasFinishedActionButtons && currentTextLength > 0) {
           isGenerating = false;
         } else if (currentTextLength > 0 && currentTextLength === lastLength) {
           stableCount++;
-          // Require at least 2 consecutive stable checks (~4s) to guarantee completion
           if (stableCount >= 2) {
             isGenerating = false;
           } else {
@@ -795,4 +735,3 @@ if (isDirectRun) {
     process.exit(1);
   });
 }
-

@@ -393,7 +393,7 @@ export async function ensureDefaultPrompts() {
         type: "individual",
         description:
           "High-impact, discovery-driven single book summary prompt generating clean semantic HTML formatted for reading and audio.",
-        content: `> **Topic / Title:** {{topic}} — {{title}}\n> **Content Type:** {{contentType}}\n\n${MASTER_PROMPT_TEMPLATE}`,
+        content: `**Topic:** {{topic}}\n\n**Book:** {{title}}\n\n**Author:** {{author}}\n\n**Content Type:** {{contentType}}\n\n**Audience:** US/Western adults\n\n**Target Length:** ~2000 words(1800-2300 words)\n\n**Goal:** [You decided by yourself, I dont know].\n\n${MASTER_PROMPT_TEMPLATE}`,
         isActive: true,
         isDefault: true,
       },
@@ -402,7 +402,7 @@ export async function ensureDefaultPrompts() {
         type: "multibook",
         description:
           "Deep synthesis across multiple top books on a single theme, contrasting perspectives and surfacing systemic insights in clean HTML.",
-        content: `> **Topic / Title:** {{topic}} — {{books}}\n> **Content Type:** {{contentType}}\n\n${MASTER_PROMPT_TEMPLATE}`,
+        content: `**Topic:** {{topic}}\n\n**Books:** {{books}}\n\n**Content Type:** {{contentType}}\n\n**Audience:** US/Western adults\n\n**Target Length:** ~2,000 words\n\n**Goal:** Synthesize key agreements, contradictions, and complementary models across these seminal works into one coherent intellectual journey.\n\n${MASTER_PROMPT_TEMPLATE}`,
         isActive: true,
         isDefault: true,
       },

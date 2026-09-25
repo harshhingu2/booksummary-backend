@@ -65,7 +65,7 @@ export async function GET(request: NextRequest) {
         const booksVal = summary.title || "";
         const contentTypeVal = "Multi-Book Synthesis";
 
-        const populatedPrompt = template
+        let populatedPrompt = template
           .replace(/\{\{topic\}\}/gi, topicVal)
           .replace(/\{\{books\}\}/gi, booksVal)
           .replace(/\{\{title\}\}/gi, booksVal)
@@ -73,6 +73,20 @@ export async function GET(request: NextRequest) {
           .replace(/\{\{audience\}\}/gi, "US/Western adults")
           .replace(/\{\{targetLength\}\}/gi, "~2,000 words")
           .replace(/\{\{goal\}\}/gi, "[Decided by you]");
+
+        const topSlice = populatedPrompt.slice(0, 600);
+        const hasTopicAtTop = /^\s*(?:>\s*)?\*\*Topic/im.test(topSlice);
+        const hasBooksAtTop = /^\s*(?:>\s*)?\*\*(?:Books?|Title)/im.test(topSlice);
+        if (!hasTopicAtTop || !hasBooksAtTop) {
+          const headerLines: string[] = [
+            `**Topic:** ${topicVal}`,
+            `**Books:** ${booksVal}`,
+          ];
+          if (!/^\s*(?:>\s*)?\*\*Content Type:\*\*/im.test(topSlice)) {
+            headerLines.push(`**Content Type:** ${contentTypeVal}`);
+          }
+          populatedPrompt = headerLines.join("\n\n") + "\n\n" + populatedPrompt.trimStart();
+        }
 
         console.log(`[Cron MultiBook AI] Generating content for "${summary.title}" via ${scraperEngine}...`);
 

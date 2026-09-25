@@ -66,15 +66,32 @@ export async function GET(request: NextRequest) {
         const authorVal = book.author || "";
         const contentTypeVal = "Single Book Summary";
 
-        const populatedPrompt = template
+        let populatedPrompt = template
           .replace(/\{\{topic\}\}/gi, topicVal)
           .replace(/\{\{title\}\}/gi, titleVal)
           .replace(/\{\{books\}\}/gi, titleVal)
           .replace(/\{\{author\}\}/gi, authorVal)
           .replace(/\{\{contentType\}\}/gi, contentTypeVal)
           .replace(/\{\{audience\}\}/gi, "US/Western adults")
-          .replace(/\{\{targetLength\}\}/gi, "~1,500 words")
-          .replace(/\{\{goal\}\}/gi, "[Decided by you]");
+          .replace(/\{\{targetLength\}\}/gi, "~2000 words(1800-2300 words)")
+          .replace(/\{\{goal\}\}/gi, "[You decided by yourself, I dont know].");
+
+        const topSlice = populatedPrompt.slice(0, 600);
+        const hasTopicAtTop = /^\s*(?:>\s*)?\*\*Topic/im.test(topSlice);
+        const hasTitleAtTop = /^\s*(?:>\s*)?\*\*(?:Book|Title)/im.test(topSlice);
+        if (!hasTopicAtTop || !hasTitleAtTop) {
+          const headerLines: string[] = [
+            `**Topic:** ${topicVal}`,
+            `**Book:** ${titleVal}`,
+          ];
+          if (authorVal) {
+            headerLines.push(`**Author:** ${authorVal}`);
+          }
+          if (!/^\s*(?:>\s*)?\*\*Content Type:\*\*/im.test(topSlice)) {
+            headerLines.push(`**Content Type:** ${contentTypeVal}`);
+          }
+          populatedPrompt = headerLines.join("\n\n") + "\n\n" + populatedPrompt.trimStart();
+        }
 
         console.log(`[Cron Individual AI] Generating content for "${book.title}" via ${scraperEngine}...`);
 

@@ -58,8 +58,25 @@ export async function POST(request: NextRequest) {
             .replace(/\{\{author\}\}/g, author || "")
             .replace(/\{\{contentType\}\}/g, type === "individual" ? "Single Book Summary" : "Multi-Book Synthesis")
             .replace(/\{\{audience\}\}/g, "US/Western adults")
-            .replace(/\{\{targetLength\}\}/g, type === "individual" ? "~1,500 words" : "~2,000 words")
+            .replace(/\{\{targetLength\}\}/g, type === "individual" ? "~2000 words(1800-2300 words)" : "~2,000 words")
             .replace(/\{\{goal\}\}/g, `Help the reader fundamentally understand the core ideas and applications.`);
+
+          const topSlice = prompt.slice(0, 600);
+          const hasTopicAtTop = /^\s*(?:>\s*)?\*\*Topic/im.test(topSlice);
+          const hasTitleAtTop = /^\s*(?:>\s*)?\*\*(?:Book|Books|Title)/im.test(topSlice);
+          if (!hasTopicAtTop || !hasTitleAtTop) {
+            const headerLines: string[] = [
+              `**Topic:** ${topic || "General"}`,
+              type === "individual" ? `**Book:** ${title}` : `**Books:** ${title}`,
+            ];
+            if (type === "individual" && author) {
+              headerLines.push(`**Author:** ${author}`);
+            }
+            if (!/^\s*(?:>\s*)?\*\*Content Type:\*\*/im.test(topSlice)) {
+              headerLines.push(`**Content Type:** ${type === "individual" ? "Single Book Summary" : "Multi-Book Synthesis"}`);
+            }
+            prompt = headerLines.join("\n\n") + "\n\n" + prompt.trimStart();
+          }
         }
       } catch (promptErr) {
         console.warn("[AI Generation] Could not fetch default prompt from DB, using fallback:", promptErr);

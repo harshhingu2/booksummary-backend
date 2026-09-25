@@ -395,7 +395,6 @@ export default function AdminBooksPage() {
       const contentTypeVal = "Multi-Book Synthesis";
 
       if (promptTemplate) {
-        // Substitute only 2 main variables: topic/title and contentType (plus legacy tags if any)
         let populatedPrompt = promptTemplate
           .replace(/\{\{topic\}\}/gi, topicVal)
           .replace(/\{\{books\}\}/gi, booksVal)
@@ -406,17 +405,35 @@ export default function AdminBooksPage() {
           .replace(/\{\{targetLength\}\}/gi, "~2,000 words")
           .replace(/\{\{goal\}\}/gi, "[Decided by you]");
 
-        // If the prompt template didn't have variable tags, ensure the 2-variable header is at the top
-        if (!promptTemplate.includes("{{topic}}") && !promptTemplate.includes("{{books}}") && !promptTemplate.includes("{{title}}")) {
-          const varHeader = `> **Topic / Title:** ${topicVal} — ${booksVal}\n> **Content Type:** ${contentTypeVal}\n\n`;
-          populatedPrompt = varHeader + populatedPrompt;
+        // Ensure Topic and Books are always present at the very top of the prompt
+        const topSlice = populatedPrompt.slice(0, 600);
+        const hasTopicAtTop = /^\s*(?:>\s*)?\*\*Topic/im.test(topSlice) || topSlice.includes(topicVal);
+        const hasBooksAtTop = /^\s*(?:>\s*)?\*\*(?:Books?|Title)/im.test(topSlice) || (booksVal && topSlice.includes(booksVal));
+
+        if (!hasTopicAtTop || !hasBooksAtTop) {
+          const headerLines: string[] = [
+            `**Topic:** ${topicVal}`,
+            `**Books:** ${booksVal}`,
+          ];
+          if (!/^\s*(?:>\s*)?\*\*Content Type:\*\*/im.test(topSlice)) {
+            headerLines.push(`**Content Type:** ${contentTypeVal}`);
+          }
+          populatedPrompt = headerLines.join("\n\n") + "\n\n" + populatedPrompt.trimStart();
         }
 
         setModalPromptText(populatedPrompt);
       } else {
-        // Fallback with only the 2 variables at top
-        const fallback = `> **Topic / Title:** ${topicVal} — ${booksVal}
-> **Content Type:** ${contentTypeVal}
+        const fallback = `**Topic:** ${topicVal}
+
+**Books:** ${booksVal}
+
+**Content Type:** ${contentTypeVal}
+
+**Audience:** US/Western adults
+
+**Target Length:** ~2,000 words
+
+**Goal:** Synthesize key agreements, contradictions, and complementary models across these seminal works into one coherent intellectual journey.
 
 # DUMBSCROLL — MASTER CONTENT GENERATION PROMPT
 
@@ -433,7 +450,7 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
       }
     } catch (err) {
       console.error("Failed to load prompt template:", err);
-      setModalPromptText(`> **Topic / Title:** ${book.topic || "General"} — ${book.title}\n> **Content Type:** Multi-Book Synthesis\n\nGenerate full high-impact summary content formatted in clean semantic HTML.`);
+      setModalPromptText(`**Topic:** ${book.topic || "General"}\n\n**Books:** ${book.title}\n\n**Content Type:** Multi-Book Synthesis\n\nGenerate full high-impact summary content formatted in clean semantic HTML.`);
     } finally {
       setLoadingPrompt(false);
     }

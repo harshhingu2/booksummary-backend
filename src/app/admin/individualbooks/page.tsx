@@ -397,34 +397,57 @@ export default function AdminIndividualBooksPage() {
 
       const topicVal = book.topic || "General";
       const titleVal = book.title || "";
-      const authorVal = book.author || "Unknown";
+      const authorVal = book.author && book.author !== "Unknown" ? book.author : "";
       const contentTypeVal = "Single Book Summary";
 
       if (promptTemplate) {
-        // Substitute only 2 main variables: topic/title (with author if present) and contentType
         let populatedPrompt = promptTemplate
           .replace(/\{\{topic\}\}/gi, topicVal)
           .replace(/\{\{title\}\}/gi, titleVal)
           .replace(/\{\{books\}\}/gi, titleVal)
-          .replace(/\{\{author\}\}/gi, authorVal)
+          .replace(/\{\{author\}\}/gi, authorVal || "Unknown")
           .replace(/\{\{contentType\}\}/gi, contentTypeVal)
           .replace(/\{\{audience\}\}/gi, "US/Western adults")
-          .replace(/\{\{targetLength\}\}/gi, "~1,500 words")
-          .replace(/\{\{goal\}\}/gi, "[Decided by you]");
+          .replace(/\{\{targetLength\}\}/gi, "~2000 words(1800-2300 words)")
+          .replace(/\{\{goal\}\}/gi, "[You decided by yourself, I dont know].");
 
-        // If the prompt template in DB didn't contain {{topic}} or {{title}}, ensure the 2-variable header is at the top
-        if (!promptTemplate.includes("{{topic}}") && !promptTemplate.includes("{{title}}") && !promptTemplate.includes("{{books}}")) {
-          const authorSuffix = authorVal ? ` (by ${authorVal})` : "";
-          const varHeader = `> **Topic / Title:** ${topicVal} — ${titleVal}${authorSuffix}\n> **Content Type:** ${contentTypeVal}\n\n`;
-          populatedPrompt = varHeader + populatedPrompt;
+        // Ensure Topic and Book/Title are always present at the very top of the prompt
+        const topSlice = populatedPrompt.slice(0, 600);
+        const hasTopicAtTop = /^\s*(?:>\s*)?\*\*Topic/im.test(topSlice) || topSlice.includes(topicVal);
+        const hasTitleAtTop = /^\s*(?:>\s*)?\*\*(?:Book|Title)/im.test(topSlice) || (titleVal && topSlice.includes(titleVal));
+
+        if (!hasTopicAtTop || !hasTitleAtTop) {
+          const headerLines: string[] = [
+            `**Topic:** ${topicVal}`,
+            `**Book:** ${titleVal}`,
+          ];
+          if (authorVal) {
+            headerLines.push(`**Author:** ${authorVal}`);
+          }
+          if (!/^\s*(?:>\s*)?\*\*Content Type:\*\*/im.test(topSlice)) {
+            headerLines.push(`**Content Type:** ${contentTypeVal}`);
+          }
+          populatedPrompt = headerLines.join("\n\n") + "\n\n" + populatedPrompt.trimStart();
         }
 
         setModalPromptText(populatedPrompt);
       } else {
-        // Fallback with only 2 variables at top
-        const authorSuffix = authorVal ? ` (by ${authorVal})` : "";
-        const fallback = `> **Topic / Title:** ${topicVal} — ${titleVal}${authorSuffix}
-> **Content Type:** ${contentTypeVal}
+        const headerLines: string[] = [
+          `**Topic:** ${topicVal}`,
+          `**Book:** ${titleVal}`,
+        ];
+        if (authorVal) {
+          headerLines.push(`**Author:** ${authorVal}`);
+        }
+        headerLines.push(`**Content Type:** ${contentTypeVal}`);
+
+        const fallback = `${headerLines.join("\n\n")}
+
+**Audience:** US/Western adults
+
+**Target Length:** ~2000 words(1800-2300 words)
+
+**Goal:** [You decided by yourself, I dont know].
 
 # DUMBSCROLL — MASTER CONTENT GENERATION PROMPT
 
@@ -441,8 +464,8 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
       }
     } catch (err) {
       console.error("Failed to load prompt template:", err);
-      const authorSuffix = book.author ? ` (by ${book.author})` : "";
-      setModalPromptText(`> **Topic / Title:** ${book.topic || "General"} — ${book.title}${authorSuffix}\n> **Content Type:** Single Book Summary\n\nGenerate full high-impact summary content formatted in clean semantic HTML.`);
+      const authorLine = book.author ? `\n\n**Author:** ${book.author}` : "";
+      setModalPromptText(`**Topic:** ${book.topic || "General"}\n\n**Book:** ${book.title}${authorLine}\n\n**Content Type:** Single Book Summary\n\nGenerate full high-impact summary content formatted in clean semantic HTML.`);
     } finally {
       setLoadingPrompt(false);
     }
