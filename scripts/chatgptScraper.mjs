@@ -188,7 +188,8 @@ async function launchBrowser(headless = false) {
       '--disable-gpu',
       '--disable-infobars',
       '--window-size=1920,1080',
-      '--disable-blink-features=AutomationControlled'
+      '--disable-blink-features=AutomationControlled',
+      '--disable-features=IsolateOrigins,site-per-process'
     ]
   };
 
@@ -201,11 +202,140 @@ async function launchBrowser(headless = false) {
   const page = (await browser.pages())[0] || (await browser.newPage());
   await page.setViewport({ width: 1920, height: 1080 });
   const ua = isLinux
-    ? 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36'
-    : 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36';
+    ? 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36'
+    : 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36';
   await page.setUserAgent(ua);
 
+  // Stealth evasions for datacenter VPS environments
+  await page.evaluateOnNewDocument(() => {
+    // 1. Hide webdriver flag
+    Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+    // 2. Mock plugins
+    Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3, 4, 5] });
+    // 3. Mock languages
+    Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+    // 4. Disguise Linux VPS SwiftShader/llvmpipe WebGL to look like real desktop GPU
+    try {
+      const getParameter = WebGLRenderingContext.prototype.getParameter;
+      WebGLRenderingContext.prototype.getParameter = function (parameter) {
+        if (parameter === 37445) return 'Google Inc. (NVIDIA)';
+        if (parameter === 37446) return 'ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Direct3D11 vs_5_0 ps_5_0, D3D11)';
+        return getParameter.apply(this, [parameter]);
+      };
+      if (window.WebGL2RenderingContext) {
+        const getParameter2 = WebGL2RenderingContext.prototype.getParameter;
+        WebGL2RenderingContext.prototype.getParameter = function (parameter) {
+          if (parameter === 37445) return 'Google Inc. (NVIDIA)';
+          if (parameter === 37446) return 'ANGLE (NVIDIA, NVIDIA GeForce RTX 3060 Direct3D11 vs_5_0 ps_5_0, D3D11)';
+          return getParameter2.apply(this, [parameter]);
+        };
+      }
+    } catch {}
+    // 5. Ensure window.chrome runtime exists
+    if (!window.chrome) {
+      window.chrome = { runtime: {} };
+    }
+  });
+
   return { browser, page };
+}
+
+async function handleCloudflareChallenge(page) {
+  try {
+    const isChallengePresent = await page.evaluate(() => {
+      const text = document.body ? document.body.innerText || '' : '';
+      return (
+        text.includes('Verify you are human') ||
+        text.includes('Just a moment...') ||
+        !!document.querySelector('iframe[src*="challenges.cloudflare.com"]') ||
+        !!document.querySelector('iframe[src*="turnstile"]') ||
+        !!document.querySelector('#challenge-stage')
+      );
+    });
+
+    if (!isChallengePresent) return true;
+
+    console.log('[ChatGPT Scraper] Cloudflare "Verify you are human" challenge detected!');
+    await takeDebugScreenshot(page, 'cloudflare_turnstile_detected');
+
+    // Attempt to click the Turnstile checkbox up to 6 times
+    for (let attempt = 1; attempt <= 6; attempt++) {
+      console.log(`[ChatGPT Scraper] Cloudflare Turnstile solve attempt ${attempt}/6...`);
+
+      // Strategy A: Frame selector click inside Turnstile iframe
+      let frameClicked = false;
+      for (const frame of page.frames()) {
+        const url = frame.url();
+        if (url.includes('challenges.cloudflare.com') || url.includes('turnstile')) {
+          const selectors = [
+            'input[type="checkbox"]',
+            'label.ctp-checkbox-label',
+            '#challenge-stage',
+            'span.mark',
+            '.ctp-checkbox-label input',
+            'div.stage'
+          ];
+          for (const sel of selectors) {
+            try {
+              const el = await frame.$(sel);
+              if (el) {
+                await el.click({ delay: 50 + Math.random() * 50 });
+                frameClicked = true;
+                console.log(`[ChatGPT Scraper] Clicked Turnstile selector in frame: ${sel}`);
+                break;
+              }
+            } catch {}
+          }
+        }
+        if (frameClicked) break;
+      }
+
+      // Strategy B: Bounding box native mouse click
+      try {
+        const iframes = await page.$$(
+          'iframe[src*="challenges.cloudflare.com"], iframe[src*="turnstile"], iframe[title*="Cloudflare"], iframe[title*="challenge"]'
+        );
+        for (const iframe of iframes) {
+          const box = await iframe.boundingBox();
+          if (box && box.width > 0 && box.height > 0) {
+            // Checkbox is ~28px from left edge, vertically centered in the 65px widget
+            const clickX = box.x + Math.min(28, box.width * 0.15);
+            const clickY = box.y + (box.height / 2);
+            await page.mouse.move(clickX, clickY, { steps: 5 });
+            await new Promise(r => setTimeout(r, 200));
+            await page.mouse.click(clickX, clickY, { delay: 80 });
+            console.log(`[ChatGPT Scraper] Native mouse clicked Turnstile checkbox at (${Math.round(clickX)}, ${Math.round(clickY)})`);
+          }
+        }
+      } catch (err) {
+        console.warn('[ChatGPT Scraper] Mouse click warning:', err.message);
+      }
+
+      // Wait 3.5s for Turnstile verification to clear
+      await new Promise(r => setTimeout(r, 3500));
+
+      // Check if prompt textarea appeared
+      const inputFound = await page.$('#prompt-textarea, div.ProseMirror, textarea');
+      if (inputFound) {
+        console.log('[ChatGPT Scraper] Cloudflare Turnstile successfully solved!');
+        await takeDebugScreenshot(page, 'cloudflare_turnstile_passed');
+
+        // Save fresh cookies back to chatgpt_cookies.json
+        try {
+          const client = await page.target().createCDPSession();
+          const { cookies } = await client.send('Network.getAllCookies');
+          const cookiePath = path.resolve(__dirname, '../chatgpt_cookies.json');
+          fs.writeFileSync(cookiePath, JSON.stringify(cookies, null, 2));
+          console.log(`[ChatGPT Scraper] Saved ${cookies.length} refreshed cookies to chatgpt_cookies.json`);
+        } catch {}
+
+        return true;
+      }
+    }
+  } catch (challengeErr) {
+    console.warn('[ChatGPT Scraper] Cloudflare challenge handler warning:', challengeErr.message);
+  }
+  return false;
 }
 
 async function handleLoginMode() {
@@ -279,6 +409,9 @@ async function scrapeChatGPT(prompt, options) {
     await page.goto('https://chatgpt.com/', { waitUntil: 'networkidle2', timeout: 60000 });
     await takeDebugScreenshot(page, '01_after_navigation');
 
+    // 1. Check and solve Cloudflare Turnstile if present right after navigation
+    await handleCloudflareChallenge(page);
+
     // Check if Cloudflare or login wall is shown
     const isLoginPromptVisible = await page.$('button[data-testid="login-button"], a[href*="/login"]');
     if (isLoginPromptVisible) {
@@ -300,10 +433,10 @@ async function scrapeChatGPT(prompt, options) {
     ];
 
     let inputElement = null;
-    for (let attempt = 0; attempt < 4; attempt++) {
+    for (let attempt = 0; attempt < 6; attempt++) {
       for (const selector of inputSelectorCandidates) {
         try {
-          await page.waitForSelector(selector, { timeout: 6000 });
+          await page.waitForSelector(selector, { timeout: 4000 });
           inputElement = await page.$(selector);
           if (inputElement) break;
         } catch {
@@ -311,6 +444,9 @@ async function scrapeChatGPT(prompt, options) {
         }
       }
       if (inputElement) break;
+
+      // If not found yet, check if Turnstile challenge appeared
+      await handleCloudflareChallenge(page);
       await new Promise(r => setTimeout(r, 1500));
     }
 
@@ -319,9 +455,15 @@ async function scrapeChatGPT(prompt, options) {
       inputElement = await page.$('div[contenteditable="true"], textarea');
     }
 
+    // If still not found, try one final Cloudflare check
+    if (!inputElement) {
+      await handleCloudflareChallenge(page);
+      inputElement = await page.$('#prompt-textarea, div.ProseMirror, div[contenteditable="true"], textarea');
+    }
+
     if (!inputElement) {
       await takeDebugScreenshot(page, '99_input_box_not_found');
-      throw new Error('Could not find ChatGPT input box. ChatGPT might be presenting a verification challenge or UI updated.');
+      throw new Error('Could not find ChatGPT input box. ChatGPT might be presenting an unresolved verification challenge or UI updated.');
     }
 
     console.log('[ChatGPT Scraper] Dismissing any overlay dialogs if present...');
