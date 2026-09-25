@@ -454,49 +454,27 @@ async function scrapeChatGPT(prompt, options) {
     await takeDebugScreenshot(page, '02_after_dialog_dismissal');
 
     console.log('[ChatGPT Scraper] Entering prompt into editor...');
-    await page.evaluate((el) => {
+    // Focus the visible editable ProseMirror or prompt element (ignoring hidden fallback textareas)
+    await page.evaluate(() => {
+      const el = document.querySelector('div#prompt-textarea.ProseMirror') ||
+                 document.querySelector('div#prompt-textarea') ||
+                 document.querySelector('div.ProseMirror') ||
+                 document.querySelector('#prompt-textarea') ||
+                 document.querySelector('div[contenteditable="true"]') ||
+                 document.querySelector('textarea:not([style*="display: none"]):not([hidden])');
       if (el) {
         el.focus();
-        try { el.click(); } catch {}
+        if (typeof el.click === 'function') try { el.click(); } catch {}
       }
-    }, inputElement);
+    });
     await new Promise(r => setTimeout(r, 300));
 
-    // Reliable input insertion for Textarea, ProseMirror, & Lexical editors
-    const inserted = await page.evaluate((text) => {
-      const el = document.querySelector('#prompt-textarea') || 
-                 document.querySelector('textarea') ||
-                 document.querySelector('div.ProseMirror') ||
-                 document.querySelector('div[contenteditable="true"]');
-      if (el) {
-        el.focus();
-        if (el.tagName === 'TEXTAREA' || el.tagName === 'INPUT') {
-          el.value = text;
-          el.dispatchEvent(new Event('input', { bubbles: true }));
-          el.dispatchEvent(new Event('change', { bubbles: true }));
-          return true;
-        } else {
-          document.execCommand('selectAll', false, null);
-          const success = document.execCommand('insertText', false, text);
-          if (success) {
-            el.dispatchEvent(new Event('input', { bubbles: true }));
-            return true;
-          }
-          el.innerText = text;
-          el.dispatchEvent(new InputEvent('input', { bubbles: true, cancelable: true, inputType: 'insertText' }));
-          return true;
-        }
-      }
-      return false;
-    }, prompt);
-
-    if (!inserted) {
-      try {
-        const client = await page.target().createCDPSession();
-        await client.send('Input.insertText', { text: prompt });
-      } catch (cdpErr) {
-        console.warn('[ChatGPT Scraper] CDP insertText fallback failed:', cdpErr.message);
-      }
+    // Type the prompt using CDP Input.insertText (cleanest for modern ProseMirror & React state)
+    try {
+      const client = await page.target().createCDPSession();
+      await client.send('Input.insertText', { text: prompt });
+    } catch {
+      await page.keyboard.type(prompt, { delay: 2 });
     }
 
     await takeDebugScreenshot(page, '03_after_prompt_typed');
