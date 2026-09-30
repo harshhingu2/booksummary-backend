@@ -33,8 +33,8 @@ const IndividualBookSchema = new Schema<IIndividualBook>(
   {
     title: { type: String, required: true, index: true },
     author: { type: String, default: "" },
-    topic: { type: String, required: true, index: true },
-    coverImage: { type: String, required: true },
+    topic: { type: String, default: "Productivity", index: true },
+    coverImage: { type: String, default: "" },
     audioUrl: { type: String, default: "" },
     readingTimeMinutes: { type: Number, default: 12 },
     shortDescription: { type: String, default: "" },

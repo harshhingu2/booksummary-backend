@@ -1,7 +1,8 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import ConfirmDeleteModal from "@/components/ConfirmDeleteModal";
+import * as XLSX from "xlsx";
 
 interface Chapter {
   chapterNumber: number;
@@ -52,6 +53,116 @@ export default function AdminIndividualBooksPage() {
   // Delete Confirmation State
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
+
+  // Bulk Import Modal State
+  const [showBulkModal, setShowBulkModal] = useState(false);
+  const [bulkFile, setBulkFile] = useState<File | null>(null);
+  const [bulkImporting, setBulkImporting] = useState(false);
+  const [bulkPreview, setBulkPreview] = useState<any[]>([]);
+  const [bulkError, setBulkError] = useState<string | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // Download Excel / CSV Template for Bulk Import
+  const handleDownloadTemplate = (format: "xlsx" | "csv" = "xlsx") => {
+    const templateData = [
+      {
+        "Title": "Atomic Habits",
+        "Author": "James Clear",
+        "Topic": "Productivity",
+        "Short Description": "An easy and proven way to build good habits and break bad ones.",
+        "Reading Time (Minutes)": 12,
+        "Add AI Queue": "TRUE",
+      },
+      {
+        "Title": "Deep Work",
+        "Author": "Cal Newport",
+        "Topic": "Focus & Career",
+        "Short Description": "Rules for focused success in a distracted world.",
+        "Reading Time (Minutes)": 15,
+        "Add AI Queue": "TRUE",
+      },
+      {
+        "Title": "The Psychology of Money",
+        "Author": "Morgan Housel",
+        "Topic": "Finance & Wealth",
+        "Short Description": "Timeless lessons on wealth, greed, and happiness.",
+        "Reading Time (Minutes)": 14,
+        "Add AI Queue": "FALSE",
+      },
+    ];
+
+    const worksheet = XLSX.utils.json_to_sheet(templateData);
+    const workbook = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(workbook, worksheet, "Books Template");
+
+    if (format === "xlsx") {
+      XLSX.writeFile(workbook, "individual_books_template.xlsx");
+    } else {
+      XLSX.writeFile(workbook, "individual_books_template.csv");
+    }
+  };
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    setBulkFile(file);
+    setBulkError(null);
+
+    // Read preview in-memory without saving
+    const reader = new FileReader();
+    reader.onload = (evt) => {
+      try {
+        const data = evt.target?.result;
+        const workbook = XLSX.read(data, { type: "binary" });
+        const firstSheet = workbook.SheetNames[0];
+        const jsonRows: any[] = XLSX.utils.sheet_to_json(workbook.Sheets[firstSheet], { defval: "" });
+        setBulkPreview(jsonRows.slice(0, 5)); // show up to 5 preview rows
+      } catch (err) {
+        console.warn("Could not preview file as workbook:", err);
+      }
+    };
+    reader.readAsBinaryString(file);
+  };
+
+  const handleBulkImportSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!bulkFile) {
+      setBulkError("Please select an Excel (.xlsx, .xls) or CSV file first.");
+      return;
+    }
+
+    try {
+      setBulkImporting(true);
+      setBulkError(null);
+
+      const formDataObj = new FormData();
+      formDataObj.append("file", bulkFile);
+
+      const res = await fetch("/api/admin/individualbooks/bulk-import", {
+        method: "POST",
+        body: formDataObj,
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        setMessage({
+          text: `🎉 ${data.message || `Successfully imported ${data.importedCount} books into AI generation queue!`}`,
+          type: "success",
+        });
+        setShowBulkModal(false);
+        setBulkFile(null);
+        setBulkPreview([]);
+        if (fileInputRef.current) fileInputRef.current.value = "";
+        fetchBooks();
+      } else {
+        setBulkError(data.error || "Failed to import books.");
+      }
+    } catch (err: any) {
+      setBulkError(err.message || "An error occurred while uploading.");
+    } finally {
+      setBulkImporting(false);
+    }
+  };
 
   // Form State
   const [formData, setFormData] = useState({
@@ -561,9 +672,53 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
             Manage individual books, pending AI drafts & review workflow, HTML content, and Cloudflare R2 media
           </p>
         </div>
-        <button onClick={handleOpenAddModal} style={styles.primaryBtn}>
-          + Add New Book
-        </button>
+        <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
+          <button
+            onClick={() => handleDownloadTemplate("xlsx")}
+            style={{
+              padding: "10px 14px",
+              backgroundColor: "#1E293B",
+              color: "#38BDF8",
+              border: "1px solid #0284C7",
+              borderRadius: "8px",
+              fontWeight: 600,
+              fontSize: "0.85rem",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+            }}
+            title="Download Excel template for bulk importing"
+          >
+            📥 Download Template
+          </button>
+          <button
+            onClick={() => {
+              setBulkFile(null);
+              setBulkPreview([]);
+              setBulkError(null);
+              setShowBulkModal(true);
+            }}
+            style={{
+              padding: "10px 16px",
+              backgroundColor: "#0D9488",
+              color: "#FFFFFF",
+              border: "none",
+              borderRadius: "8px",
+              fontWeight: 600,
+              fontSize: "0.85rem",
+              cursor: "pointer",
+              display: "flex",
+              alignItems: "center",
+              gap: "6px",
+            }}
+          >
+            📊 Bulk Import Excel
+          </button>
+          <button onClick={handleOpenAddModal} style={styles.primaryBtn}>
+            + Add New Book
+          </button>
+        </div>
       </div>
 
       {message && (
@@ -1509,6 +1664,182 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
                 </button>
                 <button type="submit" style={styles.primaryBtn} disabled={saving || uploadingImage || uploadingAudio}>
                   {saving ? "Saving Book..." : editingId ? "Update Book" : "Create Book"}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Bulk Import Modal */}
+      {showBulkModal && (
+        <div style={styles.modalBackdrop}>
+          <div style={{ ...styles.modalContent, maxWidth: "680px" }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "16px" }}>
+              <h2 style={styles.modalTitle}>📥 Bulk Import Books via Excel</h2>
+              <button
+                onClick={() => setShowBulkModal(false)}
+                style={{
+                  background: "transparent",
+                  border: "none",
+                  color: "#94A3B8",
+                  fontSize: "1.25rem",
+                  cursor: "pointer",
+                }}
+              >
+                ✕
+              </button>
+            </div>
+
+            <div style={{ marginBottom: "18px", fontSize: "0.875rem", color: "#94A3B8", lineHeight: "1.5" }}>
+              Upload an Excel spreadsheet (<strong>.xlsx</strong>, <strong>.xls</strong>) or <strong>.csv</strong> file containing book titles.
+              All imported books will automatically be added with <strong>needsContentGeneration = true</strong> to the AI content generation queue.
+              Cover images and audio files are <strong>not required</strong> during bulk import.
+            </div>
+
+            <div style={{ display: "flex", gap: "10px", marginBottom: "20px" }}>
+              <button
+                type="button"
+                onClick={() => handleDownloadTemplate("xlsx")}
+                style={{
+                  padding: "8px 14px",
+                  backgroundColor: "#0F172A",
+                  border: "1px solid #38BDF8",
+                  borderRadius: "6px",
+                  color: "#38BDF8",
+                  fontSize: "0.82rem",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                📄 Download Excel Template (.xlsx)
+              </button>
+              <button
+                type="button"
+                onClick={() => handleDownloadTemplate("csv")}
+                style={{
+                  padding: "8px 14px",
+                  backgroundColor: "#0F172A",
+                  border: "1px solid #64748B",
+                  borderRadius: "6px",
+                  color: "#94A3B8",
+                  fontSize: "0.82rem",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                📄 Download CSV Template (.csv)
+              </button>
+            </div>
+
+            {bulkError && (
+              <div
+                style={{
+                  padding: "10px 14px",
+                  backgroundColor: "#991B1B",
+                  color: "#FFFFFF",
+                  borderRadius: "8px",
+                  fontSize: "0.85rem",
+                  marginBottom: "16px",
+                }}
+              >
+                {bulkError}
+              </div>
+            )}
+
+            <form onSubmit={handleBulkImportSubmit}>
+              <div
+                style={{
+                  border: "2px dashed #334155",
+                  borderRadius: "10px",
+                  padding: "28px 20px",
+                  textAlign: "center",
+                  backgroundColor: "#0F172A",
+                  marginBottom: "18px",
+                  cursor: "pointer",
+                }}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept=".xlsx, .xls, .csv, application/vnd.openxmlformats-officedocument.spreadsheetml.sheet, application/vnd.ms-excel, text/csv"
+                  onChange={handleFileChange}
+                  style={{ display: "none" }}
+                />
+                <div style={{ fontSize: "2rem", marginBottom: "8px" }}>📊</div>
+                <div style={{ color: "#F8FAFC", fontWeight: 600, fontSize: "0.95rem", marginBottom: "4px" }}>
+                  {bulkFile ? bulkFile.name : "Click to select or drag & drop Excel / CSV file"}
+                </div>
+                <div style={{ color: "#64748B", fontSize: "0.8rem" }}>
+                  {bulkFile ? `${(bulkFile.size / 1024).toFixed(1)} KB` : "Supports .xlsx, .xls, .csv files (Processed strictly in-memory)"}
+                </div>
+              </div>
+
+              {bulkPreview.length > 0 && (
+                <div style={{ marginBottom: "18px" }}>
+                  <label style={{ ...styles.label, marginBottom: "8px" }}>Preview (First {bulkPreview.length} rows):</label>
+                  <div style={{ backgroundColor: "#0F172A", borderRadius: "8px", border: "1px solid #334155", overflowX: "auto" }}>
+                    <table style={{ width: "100%", borderCollapse: "collapse", fontSize: "0.8rem" }}>
+                      <thead>
+                        <tr style={{ borderBottom: "1px solid #334155", color: "#94A3B8" }}>
+                          <th style={{ padding: "8px 12px", textAlign: "left" }}>Title</th>
+                          <th style={{ padding: "8px 12px", textAlign: "left" }}>Author</th>
+                          <th style={{ padding: "8px 12px", textAlign: "left" }}>Topic</th>
+                          <th style={{ padding: "8px 12px", textAlign: "center" }}>AI Queue</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {bulkPreview.map((row, idx) => {
+                          const aiVal = row["Add AI Queue"] ?? row["add ai queue"] ?? row["aiqueue"] ?? row["queue"] ?? row["needscontentgeneration"] ?? "";
+                          const isQueued = String(aiVal).trim().toLowerCase() === "true" || String(aiVal).trim() === "1" || String(aiVal).trim().toLowerCase() === "yes" || aiVal === true || aiVal === "";
+                          return (
+                            <tr key={idx} style={{ borderBottom: "1px solid #1E293B" }}>
+                              <td style={{ padding: "8px 12px", color: "#F8FAFC" }}>{row.Title || row.title || row.Name || "—"}</td>
+                              <td style={{ padding: "8px 12px", color: "#94A3B8" }}>{row.Author || row.author || "—"}</td>
+                              <td style={{ padding: "8px 12px", color: "#38BDF8" }}>{row.Topic || row.topic || "Productivity"}</td>
+                              <td style={{ padding: "8px 12px", textAlign: "center" }}>
+                                <span style={{
+                                  padding: "2px 8px",
+                                  borderRadius: "4px",
+                                  fontSize: "0.75rem",
+                                  fontWeight: 600,
+                                  backgroundColor: isQueued ? "rgba(56, 189, 248, 0.15)" : "rgba(100, 116, 139, 0.15)",
+                                  color: isQueued ? "#38BDF8" : "#94A3B8"
+                                }}>
+                                  {isQueued ? "✓ YES" : "✗ NO"}
+                                </span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
+                </div>
+              )}
+
+              <div style={styles.modalActions}>
+                <button
+                  type="button"
+                  onClick={() => setShowBulkModal(false)}
+                  style={styles.cancelBtn}
+                  disabled={bulkImporting}
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  style={{
+                    ...styles.primaryBtn,
+                    backgroundColor: "#0D9488",
+                    display: "flex",
+                    alignItems: "center",
+                    gap: "6px",
+                  }}
+                  disabled={bulkImporting || !bulkFile}
+                >
+                  {bulkImporting ? "Importing & Queuing..." : "🚀 Upload & Import into Queue"}
                 </button>
               </div>
             </form>
