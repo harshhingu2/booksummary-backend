@@ -108,8 +108,8 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
     const headlessFlag = isHeadless ? "--headless" : "--headful";
     const { stdout, stderr } = await execFilePromise(
       process.execPath,
-      [scriptPath, headlessFlag, "--timeout", "200", "--prompt", prompt],
-      { timeout: 240000, maxBuffer: 10 * 1024 * 1024 }
+      [scriptPath, headlessFlag, "--timeout", "420", "--prompt", prompt],
+      { timeout: 450000, maxBuffer: 10 * 1024 * 1024 }
     );
 
     // Extract content between delimiters

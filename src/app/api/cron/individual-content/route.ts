@@ -97,8 +97,8 @@ export async function GET(request: NextRequest) {
 
         const { stdout } = await execFilePromise(
           process.execPath,
-          [scriptPath, "--headless", populatedPrompt],
-          { timeout: 180000, maxBuffer: 10 * 1024 * 1024 }
+          [scriptPath, "--headless", "--timeout", "420", populatedPrompt],
+          { timeout: 450000, maxBuffer: 10 * 1024 * 1024 }
         );
 
         const startMarker = scraperEngine === "chatgpt" ? "--- ChatGPT Response ---\n\n" : "--- DeepSeek Response ---\n\n";

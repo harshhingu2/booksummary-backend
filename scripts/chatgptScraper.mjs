@@ -32,7 +32,7 @@ function parseArgs() {
     login: false,
     prompt: '',
     headless: false,
-    timeout: 180000,
+    timeout: 420000,
     output: null,
     help: false
   };
