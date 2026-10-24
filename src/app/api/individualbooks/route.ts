@@ -7,12 +7,13 @@ export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
     const topic = searchParams.get("topic") || searchParams.get("category");
+    const categoryId = searchParams.get("categoryId");
     const search = searchParams.get("search");
     const isFeatured = searchParams.get("isFeatured");
     const status = searchParams.get("status");
     const bypassCache = searchParams.get("nocache") === "true";
 
-    const cacheKey = "individualbooks:" + (topic || "") + ":" + (search || "") + ":" + (isFeatured || "") + ":" + (status || "");
+    const cacheKey = "individualbooks:" + (categoryId || "") + ":" + (topic || "") + ":" + (search || "") + ":" + (isFeatured || "") + ":" + (status || "");
 
     if (!bypassCache) {
       const cachedData = apiCache.get(cacheKey);
@@ -38,7 +39,9 @@ export async function GET(request: NextRequest) {
       query.status = { $ne: "INACTIVE" }; // Defaults to not inactive
     }
 
-    if (topic && topic !== "All") {
+    if (categoryId) {
+      query.categoryId = categoryId;
+    } else if (topic && topic !== "All") {
       query.topic = { $regex: topic, $options: "i" };
     }
 
@@ -62,7 +65,7 @@ export async function GET(request: NextRequest) {
     }
 
     const collection = db.collection("individualbooks");
-    const books = await collection.find(query).sort({ createdAt: -1 }).toArray();
+    const books = await collection.find(query).sort({ rank: -1, createdAt: -1 }).toArray();
 
     const responseData = {
       success: true,

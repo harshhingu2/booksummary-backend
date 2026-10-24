@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { connectDB } from "@/lib/db";
 import { IndividualBook } from "@/models/IndividualBook";
+import { Category } from "@/models/Category";
 import * as XLSX from "xlsx";
 
 /**
@@ -132,6 +133,10 @@ export async function POST(req: NextRequest) {
     const docsToInsert: any[] = [];
     const skippedRows: string[] = [];
 
+    // Fetch all categories to resolve categoryId
+    const allCategories = await Category.find({});
+    const defaultCat = allCategories.find((c) => c.name.toLowerCase() === "productivity") || allCategories[0];
+
     for (let i = 0; i < rawRows.length; i++) {
       const row = rawRows[i];
 
@@ -163,13 +168,40 @@ export async function POST(req: NextRequest) {
         ""
       ).toString().trim();
 
+      const rawCategoryId = (
+        normalizedRow.categoryid ||
+        normalizedRow.category_id ||
+        row["Category ID"] ||
+        row["CategoryID"] ||
+        row.categoryId ||
+        ""
+      ).toString().trim();
+
       const topic = (
         normalizedRow.topic ||
         normalizedRow.category ||
         normalizedRow.genre ||
         row.Topic ||
+        row.Category ||
         "Productivity"
       ).toString().trim() || "Productivity";
+
+      // Match category by explicit Category ID first, then by name or slug
+      let matchedCat = null;
+      if (rawCategoryId) {
+        matchedCat = allCategories.find((c) => c._id.toString() === rawCategoryId);
+      }
+      if (!matchedCat) {
+        matchedCat = allCategories.find(
+          (c) =>
+            c.name.toLowerCase() === topic.toLowerCase() ||
+            c.slug.toLowerCase() === topic.toLowerCase() ||
+            c._id.toString() === topic
+        );
+      }
+
+      const categoryId = matchedCat ? matchedCat._id : (rawCategoryId || defaultCat?._id);
+      const resolvedTopicName = matchedCat ? matchedCat.name : topic;
 
       const shortDescription = (
         normalizedRow.shortdescription ||
@@ -180,6 +212,7 @@ export async function POST(req: NextRequest) {
         ""
       ).toString().trim();
 
+      // Calculate reading time: use uploaded column if provided, otherwise estimate from content length (~200 wpm), default 12 mins
       let readingTimeMinutes = 12;
       const rawTime =
         normalizedRow.readingtimeminutes ||
@@ -192,6 +225,12 @@ export async function POST(req: NextRequest) {
         const parsedTime = parseInt(rawTime.toString().replace(/\D/g, ""), 10);
         if (!isNaN(parsedTime) && parsedTime > 0) {
           readingTimeMinutes = parsedTime;
+        }
+      } else if (normalizedRow.content || row.Content) {
+        const textContent = (normalizedRow.content || row.Content).toString().replace(/<[^>]*>/g, " ").trim();
+        const wordCount = textContent.split(/\s+/).filter(Boolean).length;
+        if (wordCount > 0) {
+          readingTimeMinutes = Math.max(1, Math.round(wordCount / 200));
         }
       }
 
@@ -216,10 +255,27 @@ export async function POST(req: NextRequest) {
         }
       }
 
+      // Parse rank (0-100)
+      let rank = 0;
+      const rawRank =
+        normalizedRow.rank ??
+        normalizedRow.bookrank ??
+        normalizedRow.ranking ??
+        row.Rank ??
+        row.rank;
+
+      if (rawRank !== undefined && rawRank !== null && rawRank !== "") {
+        const parsedRank = parseInt(rawRank.toString().replace(/[^\d.-]/g, ""), 10);
+        if (!isNaN(parsedRank)) {
+          rank = Math.max(0, Math.min(100, parsedRank));
+        }
+      }
+
       docsToInsert.push({
         title,
         author,
-        topic,
+        topic: resolvedTopicName,
+        categoryId,
         coverImage: "", // No image required for bulk import
         audioUrl: "",   // No audio required for bulk import
         readingTimeMinutes,
@@ -228,6 +284,7 @@ export async function POST(req: NextRequest) {
         pendingContent: "",
         contentStatus: "DRAFT",
         isFeatured: false,
+        rank,
         status: "PENDING",
         needsContentGeneration, // Queued for automated cron scraper if true
       });

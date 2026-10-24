@@ -7,7 +7,8 @@ export interface IChapter {
 
 export interface IBookSummary extends Document {
   title: string;
-  topic: string;
+  topic?: string;
+  categoryId?: mongoose.Types.ObjectId | string;
   coverImage: string;
   audioUrl?: string; // Audiobook or audio narration URL in Cloudflare R2
   readingTimeMinutes: number;
@@ -31,7 +32,8 @@ const ChapterSchema = new Schema<IChapter>({
 const BookSummarySchema = new Schema<IBookSummary>(
   {
     title: { type: String, required: true, index: true },
-    topic: { type: String, required: true, index: true }, // e.g., Money, Psychology, Productivity
+    topic: { type: String, default: "", index: true }, // Legacy topic string
+    categoryId: { type: Schema.Types.ObjectId, ref: "Category", index: true }, // Category reference
     coverImage: { type: String, required: true },
     audioUrl: { type: String, default: "" },
     readingTimeMinutes: { type: Number, default: 10 },

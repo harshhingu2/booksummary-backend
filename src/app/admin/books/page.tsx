@@ -8,10 +8,17 @@ interface Chapter {
   title: string;
 }
 
+interface CategoryOption {
+  _id: string;
+  name: string;
+  slug: string;
+}
+
 interface BookItem {
   _id: string;
   title: string;
   topic: string;
+  categoryId?: string | { _id: string; name: string; slug: string };
   coverImage: string;
   audioUrl?: string;
   readingTimeMinutes: number;
@@ -28,6 +35,7 @@ interface BookItem {
 
 export default function AdminBooksPage() {
   const [books, setBooks] = useState<BookItem[]>([]);
+  const [categories, setCategories] = useState<CategoryOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
@@ -56,6 +64,7 @@ export default function AdminBooksPage() {
   const [formData, setFormData] = useState({
     title: "",
     topic: "Productivity",
+    categoryId: "",
     coverImage: "",
     audioUrl: "",
     readingTimeMinutes: 10,
@@ -87,15 +96,33 @@ export default function AdminBooksPage() {
     }
   };
 
+  const fetchCategories = async () => {
+    try {
+      const res = await fetch("/api/categories");
+      const data = await res.json();
+      if (data.success) {
+        setCategories(data.categories.map((c: any) => ({ _id: c.id, name: c.name, slug: c.slug })));
+      }
+    } catch (e) {
+      console.error("Failed to load categories:", e);
+    }
+  };
+
+  useEffect(() => {
+    fetchCategories();
+  }, []);
+
   useEffect(() => {
     fetchBooks();
   }, [search, statusFilter, contentStatusFilter]);
 
   const handleOpenAddModal = () => {
     setEditingId(null);
+    const defaultCat = categories.find((c) => c.name.toLowerCase() === "productivity") || categories[0];
     setFormData({
       title: "",
-      topic: "Productivity",
+      topic: defaultCat ? defaultCat.name : "Productivity",
+      categoryId: defaultCat ? defaultCat._id : "",
       coverImage: "",
       audioUrl: "",
       readingTimeMinutes: 10,
@@ -111,9 +138,11 @@ export default function AdminBooksPage() {
 
   const handleOpenEditModal = (b: BookItem) => {
     setEditingId(b._id);
+    const rawCatId = typeof b.categoryId === "object" && b.categoryId !== null ? b.categoryId._id : b.categoryId || "";
     setFormData({
       title: b.title,
       topic: b.topic || "Productivity",
+      categoryId: rawCatId,
       coverImage: b.coverImage || "",
       audioUrl: b.audioUrl || "",
       readingTimeMinutes: b.readingTimeMinutes || 10,
@@ -284,6 +313,7 @@ export default function AdminBooksPage() {
       const payload = {
         title: formData.title,
         topic: formData.topic,
+        categoryId: formData.categoryId || undefined,
         coverImage: formData.coverImage,
         audioUrl: formData.audioUrl,
         readingTimeMinutes: Number(formData.readingTimeMinutes) || 10,
@@ -697,7 +727,9 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
                       </div>
                     </td>
                     <td style={styles.td}>
-                      <span style={styles.topicBadge}>{b.topic}</span>
+                      <span style={styles.topicBadge}>
+                        {typeof b.categoryId === "object" && b.categoryId?.name ? b.categoryId.name : b.topic}
+                      </span>
                     </td>
                     <td style={styles.td}>{b.readingTimeMinutes} mins</td>
                     <td style={styles.td}>
@@ -1279,14 +1311,28 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
                   />
                 </div>
                 <div style={{ flex: 1 }}>
-                  <label style={styles.label}>Topic / Category</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Money, Psychology, Productivity"
-                    value={formData.topic}
-                    onChange={(e) => setFormData({ ...formData, topic: e.target.value })}
+                  <label style={styles.label}>Category *</label>
+                  <select
+                    value={formData.categoryId}
+                    onChange={(e) => {
+                      const selectedId = e.target.value;
+                      const matched = categories.find((c) => c._id === selectedId);
+                      setFormData({
+                        ...formData,
+                        categoryId: selectedId,
+                        topic: matched ? matched.name : formData.topic,
+                      });
+                    }}
                     style={styles.modalInput}
-                  />
+                    required
+                  >
+                    <option value="">-- Select Category --</option>
+                    {categories.map((c) => (
+                      <option key={c._id} value={c._id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
               </div>
 

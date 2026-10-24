@@ -11,6 +11,20 @@ puppeteer.use(StealthPlugin());
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const USER_DATA_DIR = path.resolve(__dirname, '../.chatgpt_profile');
+const PUBLIC_DIR = path.resolve(__dirname, '../public');
+const DEBUG_SCREENSHOT_PATH = path.join(PUBLIC_DIR, 'debug_chatgpt.png');
+
+async function saveDebugScreenshot(page, stepName) {
+  try {
+    if (!fs.existsSync(PUBLIC_DIR)) {
+      fs.mkdirSync(PUBLIC_DIR, { recursive: true });
+    }
+    await page.screenshot({ path: DEBUG_SCREENSHOT_PATH, fullPage: false });
+    console.log(`[ChatGPT Scraper Screenshot] Updated (${stepName}) -> public/debug_chatgpt.png`);
+  } catch (err) {
+    console.warn(`[ChatGPT Scraper Screenshot Failed] ${stepName}: ${err.message}`);
+  }
+}
 
 function parseArgs() {
   const args = process.argv.slice(2);
@@ -371,15 +385,18 @@ async function scrapeChatGPT(prompt, options) {
 
     // Give time for client-side hydration & Turnstile loading
     await new Promise(r => setTimeout(r, 4000));
+    await saveDebugScreenshot(page, 'after-navigation');
 
     // 1. Check and solve Cloudflare Turnstile if present right after navigation
     await handleCloudflareChallenge(page);
+    await saveDebugScreenshot(page, 'after-challenge-check');
 
     // Check if login wall is shown
     const isLoginPromptVisible = await page.$('button[data-testid="login-button"], a[href*="/login"]');
     if (isLoginPromptVisible) {
       console.warn('\n[Warning] It seems you are not logged in. ChatGPT may limit requests or prompt for login.');
       console.warn('Consider running: node scripts/chatgptScraper.mjs --login\n');
+      await saveDebugScreenshot(page, 'login-wall-detected');
     }
 
     // Wait for prompt input area across all modern ChatGPT UI variations
@@ -404,6 +421,7 @@ async function scrapeChatGPT(prompt, options) {
     }
 
     if (!inputElement) {
+      await saveDebugScreenshot(page, 'missing-input-box');
       throw new Error('Could not find ChatGPT input box. ChatGPT might be presenting an unresolved verification challenge or UI updated.');
     }
 
@@ -458,6 +476,8 @@ async function scrapeChatGPT(prompt, options) {
       await page.keyboard.type(prompt, { delay: 2 });
     }
 
+    await saveDebugScreenshot(page, 'prompt-entered');
+
     console.log('[ChatGPT Scraper] Submitting prompt...');
     await new Promise(r => setTimeout(r, 600));
 
@@ -496,6 +516,8 @@ async function scrapeChatGPT(prompt, options) {
       await page.keyboard.press('Enter');
     }
 
+    await saveDebugScreenshot(page, 'prompt-sent');
+
     console.log('[ChatGPT Scraper] Prompt sent! Waiting for response to generate...');
 
     // Wait at least 4 seconds for generation to commence and render first tokens
@@ -508,6 +530,7 @@ async function scrapeChatGPT(prompt, options) {
 
     while (isGenerating) {
       if (Date.now() - startTime > options.timeout) {
+        await saveDebugScreenshot(page, 'timeout-during-generation');
         throw new Error(`Timeout after ${options.timeout / 1000}s waiting for ChatGPT response.`);
       }
 
@@ -651,6 +674,7 @@ async function scrapeChatGPT(prompt, options) {
     });
 
     if (!result || !result.text) {
+      await saveDebugScreenshot(page, 'failed-extraction');
       throw new Error('Failed to parse ChatGPT response content from the page.');
     }
 
@@ -664,9 +688,20 @@ async function scrapeChatGPT(prompt, options) {
       console.log(`[ChatGPT Scraper] Output saved to: ${outPath}`);
     }
 
+    // Success: clean up debug screenshot so only 1 debug screenshot remains when needed/failing
+    if (fs.existsSync(DEBUG_SCREENSHOT_PATH)) {
+      try {
+        fs.unlinkSync(DEBUG_SCREENSHOT_PATH);
+        console.log('[ChatGPT Scraper] Successful scrape! Removed debug screenshot.');
+      } catch {}
+    }
+
     return result;
   } catch (err) {
     console.error(`\n[ChatGPT Scraper Error] ${err.message}`);
+    try {
+      await saveDebugScreenshot(page, 'fatal-error');
+    } catch {}
     throw err;
   } finally {
     try {

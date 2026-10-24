@@ -7,13 +7,14 @@ export async function GET(request: NextRequest) {
   try {
     const searchParams = request.nextUrl.searchParams;
     const topic = searchParams.get("topic") || searchParams.get("category");
+    const categoryId = searchParams.get("categoryId");
     const search = searchParams.get("search");
     const isTopCombine = searchParams.get("isTopCombine");
     const status = searchParams.get("status");
     const bypassCache = searchParams.get("nocache") === "true";
 
     // Generate unique cache key based on query parameters
-    const cacheKey = `topcombinebooksummary:${topic || ""}:${search || ""}:${isTopCombine || ""}:${status || ""}`;
+    const cacheKey = `topcombinebooksummary:${categoryId || ""}:${topic || ""}:${search || ""}:${isTopCombine || ""}:${status || ""}`;
 
     if (!bypassCache) {
       const cachedData = apiCache.get(cacheKey);
@@ -39,7 +40,9 @@ export async function GET(request: NextRequest) {
       query.status = { $ne: "INACTIVE" }; // Defaults to not inactive
     }
 
-    if (topic) {
+    if (categoryId) {
+      query.categoryId = categoryId;
+    } else if (topic) {
       query.topic = { $regex: topic, $options: "i" };
     }
 

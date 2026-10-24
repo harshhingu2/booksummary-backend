@@ -1,5 +1,6 @@
 import mongoose from "mongoose";
 import fs from "fs";
+import path from "path";
 import bcrypt from "bcryptjs";
 import dns from "dns";
 
@@ -103,12 +104,13 @@ async function ensureAdminAndInitialData() {
       await existingAdmin.save();
     }
 
-    // 2. Ensure Categories Exist & Add 'Random'
+    // 2. Ensure Categories Exist from jsonFIles/categories.json (or fallback)
     const CategorySchema = new mongoose.Schema(
       {
         name: { type: String, required: true, unique: true },
         slug: { type: String, required: true, unique: true },
         description: { type: String, default: "" },
+        type: { type: String, enum: ["all", "topcombine", "individual"], default: "all" },
         isActive: { type: Boolean, default: true },
         sortOrder: { type: Number, default: 0 },
       },
@@ -117,24 +119,23 @@ async function ensureAdminAndInitialData() {
 
     const Category = mongoose.models.Category || mongoose.model("Category", CategorySchema, "categories");
 
-    for (let idx = 0; idx < INITIAL_CATEGORIES.length; idx++) {
-      const catName = INITIAL_CATEGORIES[idx];
-      const slug = catName.toLowerCase().replace(/[^a-z0-9]+/g, "-");
-      try {
-        await Category.updateOne(
-          { name: catName },
-          { $setOnInsert: { name: catName, slug, description: `Default ${catName} category`, isActive: true, sortOrder: idx } },
-          { upsert: true }
-        );
-      } catch (catErr) {}
-    }
-
     try {
-      const hasRandom = await Category.findOne({ name: "Random" });
-      if (hasRandom) {
-        await Category.deleteOne({ name: "General" });
+      const existingCount = await Category.countDocuments();
+      if (existingCount === 0) {
+        const categoriesFilePath = path.join(process.cwd(), "jsonFIles", "categories.json");
+        if (fs.existsSync(categoriesFilePath)) {
+          const rawData = fs.readFileSync(categoriesFilePath, "utf-8");
+          const predefinedCategories = JSON.parse(rawData);
+
+          if (Array.isArray(predefinedCategories) && predefinedCategories.length > 0) {
+            await Category.insertMany(predefinedCategories);
+            console.log(`[Auto-Init] Inserted ${predefinedCategories.length} categories from jsonFIles/categories.json!`);
+          }
+        }
       }
-    } catch (e) {}
+    } catch (catInitErr) {
+      console.error("[Auto-Init] Error seeding categories from categories.json:", catInitErr);
+    }
 
     // 3. Update/Ensure YouTube Channels (Syncing Channel ID, Feed URL, Channel URL without overriding category)
     const YouTubeChannelSchema = new mongoose.Schema(
@@ -297,6 +298,49 @@ async function ensureAdminAndInitialData() {
       console.error("[Auto-Init] Failed to ensure contentStatus fields:", fieldErr);
     }
 
+    // 6. Ensure categoryId is populated on all BookSummary & IndividualBook documents
+    try {
+      const { BookSummary } = await import("@/models/Book");
+      const { IndividualBook } = await import("@/models/IndividualBook");
+      const { Category } = await import("@/models/Category");
+
+      const allCategories = await Category.find({});
+      const defaultCategory = allCategories.find((c) => c.name.toLowerCase() === "productivity") || allCategories[0];
+
+      if (allCategories.length > 0) {
+        // Backfill BookSummary
+        const unlinkedSummaries = await BookSummary.find({
+          $or: [{ categoryId: { $exists: false } }, { categoryId: null }],
+        });
+        for (const summary of unlinkedSummaries) {
+          const matchedCat = allCategories.find(
+            (c) =>
+              c.name.toLowerCase() === (summary.topic || "").trim().toLowerCase() ||
+              c.slug.toLowerCase() === (summary.topic || "").trim().toLowerCase()
+          );
+          summary.categoryId = matchedCat ? matchedCat._id : defaultCategory?._id;
+          await summary.save();
+        }
+
+        // Backfill IndividualBook
+        const unlinkedBooks = await IndividualBook.find({
+          $or: [{ categoryId: { $exists: false } }, { categoryId: null }],
+        });
+        for (const book of unlinkedBooks) {
+          const matchedCat = allCategories.find(
+            (c) =>
+              c.name.toLowerCase() === (book.topic || "").trim().toLowerCase() ||
+              c.slug.toLowerCase() === (book.topic || "").trim().toLowerCase()
+          );
+          book.categoryId = matchedCat ? matchedCat._id : defaultCategory?._id;
+          await book.save();
+        }
+        console.log("[Auto-Init] Ensured categoryId populated on all existing books.");
+      }
+    } catch (catBackfillErr) {
+      console.error("[Auto-Init] Failed to backfill categoryId on books:", catBackfillErr);
+    }
+
     globalForDb.adminEnsured = true;
   } catch (err) {
     console.error("[Auto-Init] Failed to ensure initial data:", err);
@@ -316,28 +360,42 @@ export async function connectDB() {
     throw new Error("Please define the MONGODB_URI environment variable inside .env.local");
   }
 
-  if (globalForDb.mongooseConn!.conn) {
+  // If already connected in Mongoose, reuse it directly
+  if (mongoose.connection.readyState >= 1) {
+    globalForDb.mongooseConn = { conn: mongoose, promise: Promise.resolve(mongoose) };
     await ensureAdminAndInitialData();
-    return globalForDb.mongooseConn!.conn;
+    return mongoose;
   }
 
-  if (!globalForDb.mongooseConn!.promise) {
-    console.log(`Connecting to MongoDB at: ${MONGODB_URI}`);
-    globalForDb.mongooseConn!.promise = mongoose
-      .connect(MONGODB_URI, {
-        serverSelectionTimeoutMS: 5000,
-        bufferCommands: true,
-      })
-      .then((m) => m);
+  if (globalForDb.mongooseConn?.conn) {
+    await ensureAdminAndInitialData();
+    return globalForDb.mongooseConn.conn;
+  }
+
+  if (!globalForDb.mongooseConn?.promise) {
+    const maskedUri = MONGODB_URI.replace(/:([^:@]+)@/, ":****@");
+    console.log(`[MongoDB] Connecting to ${maskedUri}`);
+    globalForDb.mongooseConn = {
+      conn: null,
+      promise: mongoose
+        .connect(MONGODB_URI, {
+          serverSelectionTimeoutMS: 5000,
+          bufferCommands: true,
+        })
+        .then((m) => {
+          console.log("[MongoDB] Connected successfully.");
+          return m;
+        }),
+    };
   }
 
   try {
-    globalForDb.mongooseConn!.conn = await globalForDb.mongooseConn!.promise;
+    globalForDb.mongooseConn.conn = await globalForDb.mongooseConn.promise;
   } catch (e) {
-    globalForDb.mongooseConn!.promise = null;
+    globalForDb.mongooseConn = { conn: null, promise: null };
     throw e;
   }
 
   await ensureAdminAndInitialData();
-  return globalForDb.mongooseConn!.conn;
+  return globalForDb.mongooseConn.conn;
 }

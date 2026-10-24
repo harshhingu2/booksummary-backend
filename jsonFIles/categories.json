@@ -1,0 +1,281 @@
+[
+  {
+    "_id": "6748b9c2ce86b4699e18914b",
+    "name": "Biography & Memoir",
+    "slug": "biography-memoir",
+    "description": "Inspiring life stories, memoirs, and autobiographies of influential figures.",
+    "type": "all",
+    "isActive": true,
+    "sortOrder": 1
+  },
+  {
+    "_id": "672f3921afa6e5a567d19e47",
+    "name": "Book Types",
+    "slug": "book-types",
+    "description": "Guides, formats, and structural breakdowns across diverse book categories.",
+    "type": "all",
+    "isActive": true,
+    "sortOrder": 2
+  },
+  {
+    "_id": "678d564e686f698d8b39ebb2",
+    "name": "Career & Success",
+    "slug": "career-success",
+    "description": "Professional growth, career navigation, interviews, and workplace success.",
+    "type": "all",
+    "isActive": true,
+    "sortOrder": 3
+  },
+  {
+    "_id": "674c424c0ab72763e92f0402",
+    "name": "Communication Skills",
+    "slug": "communication-skills",
+    "description": "Public speaking, persuasive negotiation, active listening, and relationship dialogue.",
+    "type": "all",
+    "isActive": true,
+    "sortOrder": 4
+  },
+  {
+    "_id": "6750e92fb898b350b13c6e89",
+    "name": "Corporate Culture",
+    "slug": "corporate-culture",
+    "description": "Organizational health, teamwork dynamics, workplace values, and leadership environments.",
+    "type": "all",
+    "isActive": true,
+    "sortOrder": 5
+  },
+  {
+    "_id": "67581f3ffb266fecd1d5668e",
+    "name": "Creativity",
+    "slug": "creativity",
+    "description": "Creative thinking, artistic exploration, innovation, and breaking conventional barriers.",
+    "type": "all",
+    "isActive": true,
+    "sortOrder": 6
+  },
+  {
+    "_id": "67008b610d554dee44d80328",
+    "name": "Economics",
+    "slug": "economics",
+    "description": "Macroeconomics, market mechanisms, global trade, and financial systems.",
+    "type": "all",
+    "isActive": true,
+    "sortOrder": 7
+  },
+  {
+    "_id": "67c0c609a43e96a8390f518f",
+    "name": "Education",
+    "slug": "education",
+    "description": "Modern learning methodologies, academic insights, and lifelong knowledge acquisition.",
+    "type": "all",
+    "isActive": true,
+    "sortOrder": 8
+  },
+  {
+    "_id": "673b9d9e0857784f2d30a758",
+    "name": "Entrepreneurship",
+    "slug": "entrepreneurship",
+    "description": "Startup fundamentals, business scaling, venture creation, and founder strategies.",
+    "type": "all",
+    "isActive": true,
+    "sortOrder": 9
+  },
+  {
+    "_id": "6706867110115c8d80410b3f",
+    "name": "Fantasy",
+    "slug": "fantasy",
+    "description": "Mythical realms, magic systems, legendary epics, and imaginative adventures.",
+    "type": "all",
+    "isActive": true,
+    "sortOrder": 10
+  },
+  {
+    "_id": "67d8e7b868e25c955e9755d6",
+    "name": "Fiction",
+    "slug": "fiction",
+    "description": "Narrative novels, literary masterpieces, character journeys, and captivating storytelling.",
+    "type": "all",
+    "isActive": true,
+    "sortOrder": 11
+  },
+  {
+    "_id": "67d7dc029fcc950ac1a6ad65",
+    "name": "Fiction Authors",
+    "slug": "fiction-authors",
+    "description": "Spotlights, styles, and literary portfolios of celebrated fiction writers.",
+    "type": "all",
+    "isActive": true,
+    "sortOrder": 12
+  },
+  {
+    "_id": "672b30fd8539cd446ff37722",
+    "name": "Health & Nutrition",
+    "slug": "health-nutrition",
+    "description": "Physical well-being, longevity, fitness regimens, and evidence-based nutrition.",
+    "type": "all",
+    "isActive": true,
+    "sortOrder": 13
+  },
+  {
+    "_id": "673265b56c84d8530556543f",
+    "name": "History",
+    "slug": "history",
+    "description": "Historical eras, world-changing events, ancient civilizations, and historical revolutions.",
+    "type": "all",
+    "isActive": true,
+    "sortOrder": 14
+  },
+  {
+    "_id": "673c08acd88f7172bc70199a",
+    "name": "Management & Leadership",
+    "slug": "management-leadership",
+    "description": "Executive leadership, managerial frameworks, team empowerment, and strategic vision.",
+    "type": "all",
+    "isActive": true,
+    "sortOrder": 15
+  },
+  {
+    "_id": "67a841070583165eb29d6bb8",
+    "name": "Marketing & Sales",
+    "slug": "marketing-sales",
+    "description": "Brand positioning, consumer psychology, sales funnels, and marketing campaigns.",
+    "type": "all",
+    "isActive": true,
+    "sortOrder": 16
+  },
+  {
+    "_id": "671335fd30ade28051b755ae",
+    "name": "Mindfulness & Happiness",
+    "slug": "mindfulness-happiness",
+    "description": "Inner peace, meditation practices, emotional resilience, and intentional living.",
+    "type": "all",
+    "isActive": true,
+    "sortOrder": 17
+  },
+  {
+    "_id": "67f512f106118edd1f93fc10",
+    "name": "Money & Investments",
+    "slug": "money-investments",
+    "description": "Personal finance, asset allocation, investment strategies, and financial freedom.",
+    "type": "all",
+    "isActive": true,
+    "sortOrder": 18
+  },
+  {
+    "_id": "678542717a162cbf84ae24ad",
+    "name": "Motivation & Inspiration",
+    "slug": "motivation-inspiration",
+    "description": "Goal drive, overcoming obstacles, mental grit, and uplifting stories.",
+    "type": "all",
+    "isActive": true,
+    "sortOrder": 19
+  },
+  {
+    "_id": "67a81eb1a34a8380498da23a",
+    "name": "Nature & the Environment",  
+    "slug": "nature-the-environment",
+    "description": "Ecology, conservation, planet biodiversity, and environmental stewardship.",
+    "type": "all",
+    "isActive": true,
+    "sortOrder": 20
+  },
+  {
+    "_id": "67af9f05ae072f5ed72d1f78",
+    "name": "Parenting",
+    "slug": "parenting",
+    "description": "Child development, empathetic parenting, family dynamics, and educational guidance.",
+    "type": "all",
+    "isActive": true,
+    "sortOrder": 21
+  },
+  {
+    "_id": "6714a27f8488cbc460ed156d",
+    "name": "Personal Development",
+    "slug": "personal-development",
+    "description": "Self-actualization, discipline, emotional intelligence, and growth mindset.",
+    "type": "all",
+    "isActive": true,
+    "sortOrder": 22
+  },
+  {
+    "_id": "672a5cbef82aac59f532336b",
+    "name": "Philosophy",
+    "slug": "philosophy",
+    "description": "Classical and modern philosophy, ethical reasoning, and existential thought.",
+    "type": "all",
+    "isActive": true,
+    "sortOrder": 23
+  },
+  {
+    "_id": "6798a35ec188840a28c51693",
+    "name": "Politics",
+    "slug": "politics",
+    "description": "Political science, governance systems, civic engagement, and public policies.",
+    "type": "all",
+    "isActive": true,
+    "sortOrder": 24
+  },
+  {
+    "_id": "675b2f25b222a23e20839661",
+    "name": "Productivity",
+    "slug": "productivity",
+    "description": "Time management, efficient habits, deep work strategies, and goal achievement.",
+    "type": "all",
+    "isActive": true,
+    "sortOrder": 25
+  },
+  {
+    "_id": "6744e84792a1ed6bd7bbd150",
+    "name": "Psychology",
+    "slug": "psychology",
+    "description": "Human behavior, cognitive science, social psychology, and mental processes.",
+    "type": "all",
+    "isActive": true,
+    "sortOrder": 26
+  },
+  {
+    "_id": "67ec5d13a22f4014fa82aa38",
+    "name": "Religion & Spirituality",
+    "slug": "religion-spirituality",
+    "description": "Spiritual traditions, world religions, sacred texts, and faith philosophies.",
+    "type": "all",
+    "isActive": true,
+    "sortOrder": 27
+  },
+  {
+    "_id": "6713e85747168db1db155f7b",
+    "name": "Science",
+    "slug": "science",
+    "description": "Physics, astronomy, biology, chemistry, and groundbreaking scientific research.",
+    "type": "all",
+    "isActive": true,
+    "sortOrder": 28
+  },
+  {
+    "_id": "677216e37fccf2eb9ddb3498",
+    "name": "Relationships",
+    "slug": "relationships",
+    "description": "Interpersonal connections, empathy, romantic partnerships, and conflict resolution.",
+    "type": "all",
+    "isActive": true,
+    "sortOrder": 29
+  },
+  {
+    "_id": "6707530b87ba660aca5efe94",
+    "name": "Society & Culture",
+    "slug": "society-culture",
+    "description": "Sociology, cultural anthropology, modern civilization, and societal trends.",
+    "type": "all",
+    "isActive": true,
+    "sortOrder": 30
+  },
+  {
+    "_id": "67534bd2877b11edd43303c7",
+    "name": "Technology & the Future",
+    "slug": "technology-the-future",
+    "description": "Artificial intelligence, computing, technological disruption, and future trends.",
+    "type": "all",
+    "isActive": true,
+    "sortOrder": 31
+  }
+]

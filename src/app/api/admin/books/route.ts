@@ -6,6 +6,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { connectDB } from "@/lib/db";
 import { BookSummary } from "@/models/Book";
+import { Category } from "@/models/Category";
 
 async function verifyAdminAuth() {
   const session = await getServerSession(authOptions);
@@ -27,6 +28,7 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search") || "";
     const topic = searchParams.get("topic") || "";
+    const categoryId = searchParams.get("categoryId") || "";
     const status = searchParams.get("status") || "";
     const contentStatus = searchParams.get("contentStatus") || "";
 
@@ -37,7 +39,9 @@ export async function GET(request: NextRequest) {
         { shortDescription: { $regex: search, $options: "i" } },
       ];
     }
-    if (topic) {
+    if (categoryId) {
+      query.categoryId = categoryId;
+    } else if (topic) {
       query.topic = { $regex: topic, $options: "i" };
     }
     if (status && status !== "ALL") {
@@ -47,7 +51,7 @@ export async function GET(request: NextRequest) {
       query.contentStatus = contentStatus;
     }
 
-    const books = await BookSummary.find(query).sort({ createdAt: -1 });
+    const books = await BookSummary.find(query).populate("categoryId", "name slug").sort({ createdAt: -1 });
 
     return NextResponse.json({
       success: true,

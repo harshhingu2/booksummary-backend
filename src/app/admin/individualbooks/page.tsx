@@ -9,11 +9,18 @@ interface Chapter {
   title: string;
 }
 
+interface CategoryOption {
+  _id: string;
+  name: string;
+  slug: string;
+}
+
 interface IndividualBookItem {
   _id: string;
   title: string;
   author?: string;
   topic: string;
+  categoryId?: string | { _id: string; name: string; slug: string };
   coverImage: string;
   audioUrl?: string;
   readingTimeMinutes: number;
@@ -23,6 +30,7 @@ interface IndividualBookItem {
   contentStatus?: "DRAFT" | "PENDING_REVIEW" | "APPROVED" | "REJECTED";
   chapters?: Chapter[];
   isFeatured?: boolean;
+  rank?: number;
   status: "ACTIVE" | "INACTIVE" | "PENDING";
   needsContentGeneration?: boolean;
   createdAt: string;
@@ -30,6 +38,7 @@ interface IndividualBookItem {
 
 export default function AdminIndividualBooksPage() {
   const [books, setBooks] = useState<IndividualBookItem[]>([]);
+  const [categories, setCategories] = useState<CategoryOption[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
@@ -68,25 +77,28 @@ export default function AdminIndividualBooksPage() {
       {
         "Title": "Atomic Habits",
         "Author": "James Clear",
+        "Category ID": "675b2f25b222a23e20839661",
         "Topic": "Productivity",
         "Short Description": "An easy and proven way to build good habits and break bad ones.",
-        "Reading Time (Minutes)": 12,
+        "Rank": 95,
         "Add AI Queue": "TRUE",
       },
       {
         "Title": "Deep Work",
         "Author": "Cal Newport",
-        "Topic": "Focus & Career",
+        "Category ID": "678d564e686f698d8b39ebb2",
+        "Topic": "Career & Success",
         "Short Description": "Rules for focused success in a distracted world.",
-        "Reading Time (Minutes)": 15,
+        "Rank": 88,
         "Add AI Queue": "TRUE",
       },
       {
         "Title": "The Psychology of Money",
         "Author": "Morgan Housel",
-        "Topic": "Finance & Wealth",
+        "Category ID": "67f512f106118edd1f93fc10",
+        "Topic": "Money & Investments",
         "Short Description": "Timeless lessons on wealth, greed, and happiness.",
-        "Reading Time (Minutes)": 14,
+        "Rank": 85,
         "Add AI Queue": "FALSE",
       },
     ];
@@ -169,9 +181,11 @@ export default function AdminIndividualBooksPage() {
     title: "",
     author: "",
     topic: "Productivity",
+    categoryId: "",
     coverImage: "",
     audioUrl: "",
     readingTimeMinutes: 12,
+    rank: 0,
     content: "",
     pendingContent: "",
     contentStatus: "DRAFT" as "DRAFT" | "PENDING_REVIEW" | "APPROVED" | "REJECTED",
@@ -200,19 +214,38 @@ export default function AdminIndividualBooksPage() {
     }
   };
 
+  const fetchCategories = async () => {
+    try {
+      const res = await fetch("/api/categories");
+      const data = await res.json();
+      if (data.success) {
+        setCategories(data.categories.map((c: any) => ({ _id: c.id, name: c.name, slug: c.slug })));
+      }
+    } catch (e) {
+      console.error("Failed to load categories:", e);
+    }
+  };
+
+  useEffect(() => {
+    fetchCategories();
+  }, []);
+
   useEffect(() => {
     fetchBooks();
   }, [search, statusFilter, contentStatusFilter]);
 
   const handleOpenAddModal = () => {
     setEditingId(null);
+    const defaultCat = categories.find((c) => c.name.toLowerCase() === "productivity") || categories[0];
     setFormData({
       title: "",
       author: "",
-      topic: "Productivity",
+      topic: defaultCat ? defaultCat.name : "Productivity",
+      categoryId: defaultCat ? defaultCat._id : "",
       coverImage: "",
       audioUrl: "",
       readingTimeMinutes: 12,
+      rank: 0,
       content: "",
       pendingContent: "",
       contentStatus: "DRAFT",
@@ -225,13 +258,16 @@ export default function AdminIndividualBooksPage() {
 
   const handleOpenEditModal = (book: IndividualBookItem) => {
     setEditingId(book._id);
+    const rawCatId = typeof book.categoryId === "object" && book.categoryId !== null ? book.categoryId._id : book.categoryId || "";
     setFormData({
       title: book.title,
       author: book.author || "",
       topic: book.topic || "Productivity",
+      categoryId: rawCatId,
       coverImage: book.coverImage || "",
       audioUrl: book.audioUrl || "",
       readingTimeMinutes: book.readingTimeMinutes || 12,
+      rank: typeof book.rank === "number" ? book.rank : 0,
       content: book.content || "",
       pendingContent: book.pendingContent || "",
       contentStatus: book.contentStatus || (book.content ? "APPROVED" : "DRAFT"),
@@ -251,6 +287,9 @@ export default function AdminIndividualBooksPage() {
 
   const handleApproveDraft = async (bookId: string, customContent?: string) => {
     const targetContent = customContent !== undefined ? customContent : reviewDraftText;
+    const wordCount = targetContent.replace(/<[^>]*>/g, " ").trim().split(/\s+/).filter(Boolean).length;
+    const calculatedReadingTime = wordCount > 0 ? Math.max(1, Math.round(wordCount / 200)) : undefined;
+
     try {
       setReviewActionLoading(true);
       const res = await fetch(`/api/admin/individualbooks/${bookId}`, {
@@ -259,6 +298,7 @@ export default function AdminIndividualBooksPage() {
         body: JSON.stringify({
           content: targetContent,
           contentStatus: "APPROVED",
+          ...(calculatedReadingTime ? { readingTimeMinutes: calculatedReadingTime } : {}),
         }),
       });
       const data = await res.json();
@@ -400,9 +440,11 @@ export default function AdminIndividualBooksPage() {
         title: formData.title,
         author: formData.author,
         topic: formData.topic,
+        categoryId: formData.categoryId || undefined,
         coverImage: formData.coverImage,
         audioUrl: formData.audioUrl,
         readingTimeMinutes: Number(formData.readingTimeMinutes) || 10,
+        rank: Math.max(0, Math.min(100, Number(formData.rank) || 0)),
         content: formData.content,
         pendingContent: formData.pendingContent,
         contentStatus: formData.contentStatus || "DRAFT",
@@ -827,6 +869,7 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
               <tr>
                 <th style={styles.th}>Book Title & Author</th>
                 <th style={styles.th}>Topic</th>
+                <th style={styles.th}>Rank (0-100)</th>
                 <th style={styles.th}>Read Time</th>
                 <th style={styles.th}>Audiobook</th>
                 <th style={styles.th}>Pub Status</th>
@@ -869,7 +912,39 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
                       </div>
                     </td>
                     <td style={styles.td}>
-                      <span style={styles.badge}>{book.topic}</span>
+                      <span style={styles.badge}>
+                        {typeof book.categoryId === "object" && book.categoryId?.name ? book.categoryId.name : book.topic}
+                      </span>
+                    </td>
+                    <td style={styles.td}>
+                      <span
+                        style={{
+                          padding: "3px 8px",
+                          borderRadius: "6px",
+                          fontSize: "0.8rem",
+                          fontWeight: 700,
+                          backgroundColor:
+                            (book.rank || 0) >= 80
+                              ? "rgba(16, 185, 129, 0.15)"
+                              : (book.rank || 0) >= 50
+                              ? "rgba(56, 189, 248, 0.15)"
+                              : "rgba(100, 116, 139, 0.15)",
+                          color:
+                            (book.rank || 0) >= 80
+                              ? "#34D399"
+                              : (book.rank || 0) >= 50
+                              ? "#38BDF8"
+                              : "#94A3B8",
+                          border:
+                            (book.rank || 0) >= 80
+                              ? "1px solid rgba(16, 185, 129, 0.3)"
+                              : (book.rank || 0) >= 50
+                              ? "1px solid rgba(56, 189, 248, 0.3)"
+                              : "1px solid rgba(100, 116, 139, 0.3)",
+                        }}
+                      >
+                        ⭐ {book.rank ?? 0}
+                      </span>
                     </td>
                     <td style={styles.td}>{book.readingTimeMinutes} mins</td>
                     <td style={styles.td}>
@@ -1469,14 +1544,28 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
 
               <div style={{ display: "flex", gap: "16px" }}>
                 <div style={{ flex: 1 }}>
-                  <label style={styles.label}>Topic / Category</label>
-                  <input
-                    type="text"
-                    placeholder="e.g. Productivity, Mindset, Money, Philosophy"
-                    value={formData.topic}
-                    onChange={(e) => setFormData({ ...formData, topic: e.target.value })}
+                  <label style={styles.label}>Category *</label>
+                  <select
+                    value={formData.categoryId}
+                    onChange={(e) => {
+                      const selectedId = e.target.value;
+                      const matched = categories.find((c) => c._id === selectedId);
+                      setFormData({
+                        ...formData,
+                        categoryId: selectedId,
+                        topic: matched ? matched.name : formData.topic,
+                      });
+                    }}
                     style={styles.modalInput}
-                  />
+                    required
+                  >
+                    <option value="">-- Select Category --</option>
+                    {categories.map((c) => (
+                      <option key={c._id} value={c._id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
                 <div style={{ flex: 1 }}>
                   <label style={styles.label}>Estimated Read Time (Minutes)</label>
@@ -1489,18 +1578,37 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
                 </div>
               </div>
 
-              <div>
-                <label style={styles.label}>AI Content Status</label>
-                <select
-                  value={formData.contentStatus}
-                  onChange={(e) => setFormData({ ...formData, contentStatus: e.target.value as any })}
-                  style={styles.modalInput}
-                >
-                  <option value="DRAFT">⚪ DRAFT (Not reviewed)</option>
-                  <option value="PENDING_REVIEW">🟡 PENDING_REVIEW (AI Draft Ready)</option>
-                  <option value="APPROVED">🟢 APPROVED (Published to live)</option>
-                  <option value="REJECTED">🔴 REJECTED</option>
-                </select>
+              <div style={{ display: "flex", gap: "16px" }}>
+                <div style={{ flex: 1 }}>
+                  <label style={styles.label}>
+                    Rank (0 - 100) <span style={{ color: "#38BDF8", fontSize: "0.75rem", fontWeight: 400 }}>(Sort priority in categories)</span>
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="100"
+                    placeholder="e.g. 95 (higher appears first)"
+                    value={formData.rank}
+                    onChange={(e) => {
+                      const val = parseInt(e.target.value, 10);
+                      setFormData({ ...formData, rank: isNaN(val) ? 0 : Math.max(0, Math.min(100, val)) });
+                    }}
+                    style={styles.modalInput}
+                  />
+                </div>
+                <div style={{ flex: 1 }}>
+                  <label style={styles.label}>AI Content Status</label>
+                  <select
+                    value={formData.contentStatus}
+                    onChange={(e) => setFormData({ ...formData, contentStatus: e.target.value as any })}
+                    style={styles.modalInput}
+                  >
+                    <option value="DRAFT">⚪ DRAFT (Not reviewed)</option>
+                    <option value="PENDING_REVIEW">🟡 PENDING_REVIEW (AI Draft Ready)</option>
+                    <option value="APPROVED">🟢 APPROVED (Published to live)</option>
+                    <option value="REJECTED">🔴 REJECTED</option>
+                  </select>
+                </div>
               </div>
 
               {/* Cover Image URL + Cloudflare R2 Upload */}
@@ -1785,7 +1893,8 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
                         <tr style={{ borderBottom: "1px solid #334155", color: "#94A3B8" }}>
                           <th style={{ padding: "8px 12px", textAlign: "left" }}>Title</th>
                           <th style={{ padding: "8px 12px", textAlign: "left" }}>Author</th>
-                          <th style={{ padding: "8px 12px", textAlign: "left" }}>Topic</th>
+                          <th style={{ padding: "8px 12px", textAlign: "left" }}>Category / ID</th>
+                          <th style={{ padding: "8px 12px", textAlign: "center" }}>Rank (0-100)</th>
                           <th style={{ padding: "8px 12px", textAlign: "center" }}>AI Queue</th>
                         </tr>
                       </thead>
@@ -1793,11 +1902,24 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
                         {bulkPreview.map((row, idx) => {
                           const aiVal = row["Add AI Queue"] ?? row["add ai queue"] ?? row["aiqueue"] ?? row["queue"] ?? row["needscontentgeneration"] ?? "";
                           const isQueued = String(aiVal).trim().toLowerCase() === "true" || String(aiVal).trim() === "1" || String(aiVal).trim().toLowerCase() === "yes" || aiVal === true || aiVal === "";
+                          const rankVal = row.Rank ?? row.rank ?? row.Ranking ?? row.ranking ?? 0;
+                          const catIdVal = row["Category ID"] ?? row["category id"] ?? row["categoryid"] ?? row.categoryId ?? "";
+                          const topicVal = row.Topic ?? row.topic ?? row.Category ?? row.category ?? "Productivity";
                           return (
                             <tr key={idx} style={{ borderBottom: "1px solid #1E293B" }}>
                               <td style={{ padding: "8px 12px", color: "#F8FAFC" }}>{row.Title || row.title || row.Name || "—"}</td>
                               <td style={{ padding: "8px 12px", color: "#94A3B8" }}>{row.Author || row.author || "—"}</td>
-                              <td style={{ padding: "8px 12px", color: "#38BDF8" }}>{row.Topic || row.topic || "Productivity"}</td>
+                              <td style={{ padding: "8px 12px" }}>
+                                <div style={{ color: "#38BDF8", fontWeight: 600 }}>{topicVal}</div>
+                                {catIdVal && (
+                                  <div style={{ color: "#64748B", fontSize: "0.7rem", fontFamily: "monospace" }}>
+                                    {String(catIdVal).slice(0, 10)}...
+                                  </div>
+                                )}
+                              </td>
+                              <td style={{ padding: "8px 12px", textAlign: "center", color: "#34D399", fontWeight: 700 }}>
+                                {rankVal}
+                              </td>
                               <td style={{ padding: "8px 12px", textAlign: "center" }}>
                                 <span style={{
                                   padding: "2px 8px",

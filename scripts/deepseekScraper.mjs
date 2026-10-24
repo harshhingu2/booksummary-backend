@@ -11,6 +11,20 @@ puppeteer.use(StealthPlugin());
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 const USER_DATA_DIR = path.resolve(__dirname, '../.deepseek_profile');
+const PUBLIC_DIR = path.resolve(__dirname, '../public');
+const DEBUG_SCREENSHOT_PATH = path.join(PUBLIC_DIR, 'debug_deepseek.png');
+
+async function saveDebugScreenshot(page, stepName) {
+  try {
+    if (!fs.existsSync(PUBLIC_DIR)) {
+      fs.mkdirSync(PUBLIC_DIR, { recursive: true });
+    }
+    await page.screenshot({ path: DEBUG_SCREENSHOT_PATH, fullPage: false });
+    console.log(`[DeepSeek Scraper Screenshot] Updated (${stepName}) -> public/debug_deepseek.png`);
+  } catch (err) {
+    console.warn(`[DeepSeek Scraper Screenshot Failed] ${stepName}: ${err.message}`);
+  }
+}
 
 function parseArgs() {
   const args = process.argv.slice(2);
@@ -240,12 +254,14 @@ async function scrapeDeepSeek(prompt, options = {}) {
 
     // Wait a brief moment for dynamic client rendering
     await new Promise(r => setTimeout(r, 2000));
+    await saveDebugScreenshot(page, 'after-navigation');
 
     // Check if login wall is present
     const loginWall = await page.$('input[type="tel"], input[type="email"], input[placeholder*="Phone"], input[placeholder*="Email"]');
     if (loginWall) {
       console.warn('\n[Warning] It appears you are on the DeepSeek login page.');
       console.warn('Consider running: node scripts/deepseekScraper.mjs --login\n');
+      await saveDebugScreenshot(page, 'login-wall-detected');
     }
 
     // Wait for the prompt input area
@@ -270,6 +286,7 @@ async function scrapeDeepSeek(prompt, options = {}) {
     }
 
     if (!inputElement) {
+      await saveDebugScreenshot(page, 'missing-input-box');
       throw new Error('Could not find DeepSeek input box. DeepSeek might be presenting a verification challenge or UI updated.');
     }
 
@@ -315,6 +332,7 @@ async function scrapeDeepSeek(prompt, options = {}) {
     await page.keyboard.press('Backspace');
 
     await new Promise(r => setTimeout(r, 800));
+    await saveDebugScreenshot(page, 'prompt-entered');
 
     // Find and click send button (wait for it to become enabled)
     const sendButtonCandidates = [
@@ -348,6 +366,8 @@ async function scrapeDeepSeek(prompt, options = {}) {
       await page.keyboard.press('Enter');
     }
 
+    await saveDebugScreenshot(page, 'prompt-sent');
+
     console.log('[DeepSeek Scraper] Prompt sent! Waiting for response to generate...');
     
     // DeepSeek UI selectors for generation indicators & content
@@ -376,6 +396,7 @@ async function scrapeDeepSeek(prompt, options = {}) {
 
     while (isGenerating) {
       if (Date.now() - startTime > timeout) {
+        await saveDebugScreenshot(page, 'timeout-during-generation');
         throw new Error(`Timeout after ${timeout / 1000}s waiting for DeepSeek response.`);
       }
 
@@ -493,6 +514,7 @@ async function scrapeDeepSeek(prompt, options = {}) {
     });
 
     if (!result || !result.text) {
+      await saveDebugScreenshot(page, 'failed-extraction');
       throw new Error('Failed to parse DeepSeek response content from the page.');
     }
 
@@ -506,16 +528,20 @@ async function scrapeDeepSeek(prompt, options = {}) {
       console.log(`[DeepSeek Scraper] Output saved to: ${outPath}`);
     }
 
+    // Success: clean up debug screenshot so only 1 debug screenshot remains when needed/failing
+    if (fs.existsSync(DEBUG_SCREENSHOT_PATH)) {
+      try {
+        fs.unlinkSync(DEBUG_SCREENSHOT_PATH);
+        console.log('[DeepSeek Scraper] Successful scrape! Removed debug screenshot.');
+      } catch {}
+    }
+
     return result;
   } catch (err) {
     console.error(`\n[DeepSeek Scraper Error] ${err.message}`);
     try {
-      const debugScreenshotPath = path.resolve(process.cwd(), 'deepseek_scraper_error.png');
-      await page.screenshot({ path: debugScreenshotPath });
-      console.log(`[DeepSeek Scraper] Debug screenshot saved to ${debugScreenshotPath}`);
-    } catch {
-      // ignore screenshot failure
-    }
+      await saveDebugScreenshot(page, 'fatal-error');
+    } catch {}
     throw err;
   } finally {
     await browser.close();
