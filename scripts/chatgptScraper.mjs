@@ -468,12 +468,15 @@ async function scrapeChatGPT(prompt, options) {
     });
     await new Promise(r => setTimeout(r, 300));
 
+    // Ensure ChatGPT outputs in Canvas / Code Block so extraction is clean and never leaks UI chrome
+    const finalPrompt = prompt + "\n\nImportant: Output the HTML document in Canvas (or a single clean markdown HTML code block ```html ... ```). Do not include chat commentary outside the block.";
+
     // Type the prompt using CDP Input.insertText (cleanest for modern ProseMirror & React state)
     try {
       const client = await page.target().createCDPSession();
-      await client.send('Input.insertText', { text: prompt });
+      await client.send('Input.insertText', { text: finalPrompt });
     } catch {
-      await page.keyboard.type(prompt, { delay: 2 });
+      await page.keyboard.type(finalPrompt, { delay: 2 });
     }
 
     await saveDebugScreenshot(page, 'prompt-entered');
@@ -542,11 +545,23 @@ async function scrapeChatGPT(prompt, options) {
         return !!stopBtn;
       });
 
-      // Check current text length and completion indicators across all ChatGPT UI versions
+      // Check current text length and completion indicators across all ChatGPT UI versions (including Canvas / Writing block)
       const responseState = await page.evaluate(() => {
         const hasFinishedActionButtons = !!document.querySelector(
           'button[aria-label*="Copy"], button[data-testid*="copy"], button[aria-label*="copy"], button[aria-label*="Read aloud"], button[aria-label*="Good response"]'
         );
+
+        // Check Canvas / Artifact / Writing document block
+        const canvasContainers = document.querySelectorAll(
+          '[data-testid*="canvas"], [data-testid*="artifact"], div[class*="canvas"], div[class*="prose"], div.cm-content, div[role="region"], div[contenteditable="false"]'
+        );
+        let canvasText = '';
+        for (const c of canvasContainers) {
+          const t = (c.innerText || c.textContent || '').trim();
+          if (t.length > canvasText.length) {
+            canvasText = t;
+          }
+        }
 
         // 1. Check all assistant messages explicitly
         const assistantMsgs = document.querySelectorAll(
@@ -555,7 +570,7 @@ async function scrapeChatGPT(prompt, options) {
         let text = '';
         if (assistantMsgs.length > 0) {
           const last = assistantMsgs[assistantMsgs.length - 1];
-          const md = last.querySelector('.markdown, .prose, div[class*="markdown"]') || last;
+          const md = last.querySelector('.markdown, .prose, div[class*="markdown"], pre, code') || last;
           text = (md.innerText || md.textContent || '').trim();
         }
 
@@ -568,7 +583,7 @@ async function scrapeChatGPT(prompt, options) {
                            turn.getAttribute('data-message-author-role') === 'user' ||
                            !!turn.querySelector('div[data-testid="user-turn"]');
             if (!isUser) {
-              const md = turn.querySelector('.markdown, .prose, div[class*="markdown"]') || turn;
+              const md = turn.querySelector('.markdown, .prose, div[class*="markdown"], pre, code') || turn;
               const extracted = (md.innerText || md.textContent || '').trim();
               if (extracted) {
                 text = extracted;
@@ -578,10 +593,12 @@ async function scrapeChatGPT(prompt, options) {
           }
         }
 
+        const finalText = canvasText.length > text.length ? canvasText : text;
+
         return {
-          length: text.length,
+          length: finalText.length,
           hasFinishedActionButtons,
-          sampleText: text.slice(0, 80)
+          sampleText: finalText.slice(0, 80)
         };
       });
 
@@ -592,11 +609,15 @@ async function scrapeChatGPT(prompt, options) {
         lastLength = currentTextLength;
         await new Promise(r => setTimeout(r, 2000));
       } else {
-        if (responseState.hasFinishedActionButtons && currentTextLength > 0) {
+        // Generation is complete if stop button is gone and:
+        // 1. Copy or action buttons appeared, OR
+        // 2. Text has arrived (> 100 chars) and remained stable for 2 consecutive checks
+        if ((responseState.hasFinishedActionButtons && currentTextLength > 100) ||
+            (currentTextLength > 100 && currentTextLength === lastLength && ++stableCount >= 2)) {
           isGenerating = false;
         } else if (currentTextLength > 0 && currentTextLength === lastLength) {
           stableCount++;
-          if (stableCount >= 2) {
+          if (stableCount >= 3) {
             isGenerating = false;
           } else {
             await new Promise(r => setTimeout(r, 2000));
@@ -614,28 +635,70 @@ async function scrapeChatGPT(prompt, options) {
 
     console.log('[ChatGPT Scraper] Response complete. Extracting output...');
 
-    // Extract assistant's last message with comprehensive fallbacks
+    // Extract assistant's last message with comprehensive fallbacks (strictly Canvas / Code block / Assistant turn)
     const result = await page.evaluate(() => {
-      // 1. Role assistant, agent-turn, conversation-turn
+      // Helper to clean markdown code fences if wrapped in ```html ... ```
+      function sanitizeHtmlOutput(raw) {
+        if (!raw) return raw;
+        let s = raw.trim();
+        if (s.startsWith('```html')) {
+          s = s.slice(7).trimStart();
+        } else if (s.startsWith('```')) {
+          s = s.slice(3).trimStart();
+        }
+        if (s.endsWith('```')) {
+          s = s.slice(0, -3).trimEnd();
+        }
+        return s.trim();
+      }
+
+      // 1. Check for Canvas / Writing / Document widget first
+      const canvasCandidate = document.querySelector(
+        'div[data-testid*="canvas"] .prose, div[class*="canvas"] .prose, div[class*="writing"] .prose, div.cm-content, [data-testid="canvas-content"]'
+      );
+      if (canvasCandidate) {
+        const text = (canvasCandidate.innerText || canvasCandidate.textContent || '').trim();
+        if (text && text.length > 200 && !text.includes('Skip to content') && !text.startsWith('# DUMBSCROLL')) {
+          return {
+            text: sanitizeHtmlOutput(text),
+            html: canvasCandidate.innerHTML?.trim() || text
+          };
+        }
+      }
+
+      // 2. Check pre / code block inside main or assistant messages (Canvas or HTML code blocks)
+      const codeBlocks = document.querySelectorAll('main pre code, main pre, div[class*="code-block"], div[data-testid*="code-block"]');
+      for (let i = codeBlocks.length - 1; i >= 0; i--) {
+        const block = codeBlocks[i];
+        const text = (block.innerText || block.textContent || '').trim();
+        if (text && text.length > 200 && (text.includes('<h1>') || text.includes('<h2>') || text.includes('<p>') || text.includes('&lt;h1&gt;'))) {
+          return {
+            text: sanitizeHtmlOutput(text),
+            html: text
+          };
+        }
+      }
+
+      // 3. Check assistant messages in the main conversation area only (explicitly ignore nav/aside/sidebar)
       const assistantMessages = document.querySelectorAll(
-        '[data-message-author-role="assistant"], div[role="assistant"], div.agent-turn, article[data-testid*="assistant"], div[data-testid*="assistant"]'
+        'main [data-message-author-role="assistant"], main div[role="assistant"], main div.agent-turn, main article[data-testid*="assistant"]'
       );
       if (assistantMessages.length > 0) {
         for (let i = assistantMessages.length - 1; i >= 0; i--) {
           const msg = assistantMessages[i];
           const markdownBody = msg.querySelector('.markdown, .prose, div[class*="markdown"]') || msg;
-          const text = markdownBody.innerText?.trim() || markdownBody.textContent?.trim() || '';
-          if (text && text.length > 0) {
+          const text = (markdownBody.innerText || markdownBody.textContent || '').trim();
+          if (text && text.length > 200 && !text.includes('Skip to content') && !text.startsWith('# DUMBSCROLL')) {
             return {
-              text: text,
+              text: sanitizeHtmlOutput(text),
               html: markdownBody.innerHTML?.trim() || text
             };
           }
         }
       }
 
-      // 2. Modern ChatGPT: article turns (bottom-up, skip user messages)
-      const turns = document.querySelectorAll('article, [data-testid^="conversation-turn-"]');
+      // 4. Conversation turns inside <main>
+      const turns = document.querySelectorAll('main article, main [data-testid^="conversation-turn-"]');
       if (turns.length > 0) {
         for (let i = turns.length - 1; i >= 0; i--) {
           const turn = turns[i];
@@ -644,10 +707,10 @@ async function scrapeChatGPT(prompt, options) {
                          !!turn.querySelector('div[data-testid="user-turn"]');
           if (!isUser) {
             const md = turn.querySelector('.markdown, .prose, div[class*="markdown"]') || turn;
-            const text = md.innerText?.trim() || md.textContent?.trim() || '';
-            if (text && text.length > 0) {
+            const text = (md.innerText || md.textContent || '').trim();
+            if (text && text.length > 200 && !text.includes('Skip to content') && !text.startsWith('# DUMBSCROLL')) {
               return {
-                text: text,
+                text: sanitizeHtmlOutput(text),
                 html: md.innerHTML?.trim() || text
               };
             }
@@ -655,19 +718,38 @@ async function scrapeChatGPT(prompt, options) {
         }
       }
 
-      // 3. Fallback: markdown blocks not inside user container
-      const markdownBlocks = document.querySelectorAll('.markdown, .prose, div[class*="markdown"]');
-      for (let i = markdownBlocks.length - 1; i >= 0; i--) {
-        const block = markdownBlocks[i];
-        if (!block.closest('[data-message-author-role="user"]') && !block.closest('div[data-testid="user-turn"]')) {
-          const text = block.innerText?.trim() || block.textContent?.trim() || '';
-          if (text && text.length > 0) {
-            return {
-              text: text,
-              html: block.innerHTML?.trim() || text
+      // 5. Direct HTML snippet scanner inside <main> only (strictly avoiding sidebar / nav / header)
+      const mainEl = document.querySelector('main') || document.body;
+      const elementsInMain = mainEl.querySelectorAll('div, article, section');
+      let bestMatch = null;
+      let minLength = Infinity; // Find the most specific/tight container
+
+      for (const el of elementsInMain) {
+        if (el.closest('nav') || el.closest('aside') || el.closest('[data-message-author-role="user"]')) {
+          continue;
+        }
+        const raw = (el.innerText || el.textContent || '').trim();
+        if (
+          raw.length > 250 &&
+          raw.length < 50000 &&
+          !raw.includes('Skip to content') &&
+          !raw.startsWith('ChatGPT') &&
+          !raw.startsWith('# DUMBSCROLL') &&
+          (raw.includes('<h1>') || raw.includes('&lt;h1&gt;')) &&
+          (raw.includes('<h2>') || raw.includes('&lt;h2&gt;') || raw.includes('<p>'))
+        ) {
+          if (raw.length < minLength) {
+            minLength = raw.length;
+            bestMatch = {
+              text: sanitizeHtmlOutput(raw),
+              html: el.innerHTML?.trim() || raw
             };
           }
         }
+      }
+
+      if (bestMatch) {
+        return bestMatch;
       }
 
       return null;
