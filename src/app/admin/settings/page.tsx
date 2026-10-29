@@ -5,14 +5,18 @@ import React, { useState, useEffect } from "react";
 interface SettingsState {
   defaultAiScraper: "deepseek" | "chatgpt";
   individualAiScraper: "deepseek" | "chatgpt";
+  individualCronBatchSize: number;
   multibookAiScraper: "deepseek" | "chatgpt";
+  multibookCronBatchSize: number;
 }
 
 export default function AdminSettingsPage() {
   const [settings, setSettings] = useState<SettingsState>({
     defaultAiScraper: "deepseek",
     individualAiScraper: "deepseek",
+    individualCronBatchSize: 5,
     multibookAiScraper: "deepseek",
+    multibookCronBatchSize: 5,
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -27,7 +31,9 @@ export default function AdminSettingsPage() {
         setSettings({
           defaultAiScraper: data.settings.defaultAiScraper || "deepseek",
           individualAiScraper: data.settings.individualAiScraper || "deepseek",
+          individualCronBatchSize: Number(data.settings.individualCronBatchSize) || 5,
           multibookAiScraper: data.settings.multibookAiScraper || "deepseek",
+          multibookCronBatchSize: Number(data.settings.multibookCronBatchSize) || 5,
         });
       }
     } catch (err) {
@@ -160,6 +166,37 @@ export default function AdminSettingsPage() {
                 </div>
               </label>
             </div>
+
+            <div style={{ marginTop: "12px", display: "flex", alignItems: "center", gap: "12px" }}>
+              <label style={{ fontSize: "0.85rem", color: "#CBD5E1", fontWeight: 600 }}>
+                Books per Cron Execution (Batch Size):
+              </label>
+              <input
+                type="number"
+                min={1}
+                max={50}
+                value={settings.individualCronBatchSize}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    individualCronBatchSize: Math.max(1, parseInt(e.target.value, 10) || 1),
+                  })
+                }
+                style={{
+                  width: "90px",
+                  padding: "6px 10px",
+                  backgroundColor: "#0F172A",
+                  border: "1px solid #334155",
+                  borderRadius: "6px",
+                  color: "#F8FAFC",
+                  fontSize: "0.9rem",
+                  fontWeight: 600,
+                }}
+              />
+              <span style={{ fontSize: "0.8rem", color: "#64748B" }}>
+                (e.g., 5 or 10 books per run. Prevents AI rate limits & timeouts)
+              </span>
+            </div>
           </div>
 
           <div style={{ ...styles.fieldGroup, marginTop: "24px" }}>
@@ -217,6 +254,37 @@ export default function AdminSettingsPage() {
                   </div>
                 </div>
               </label>
+            </div>
+
+            <div style={{ marginTop: "12px", display: "flex", alignItems: "center", gap: "12px" }}>
+              <label style={{ fontSize: "0.85rem", color: "#CBD5E1", fontWeight: 600 }}>
+                Syntheses per Cron Execution (Batch Size):
+              </label>
+              <input
+                type="number"
+                min={1}
+                max={50}
+                value={settings.multibookCronBatchSize}
+                onChange={(e) =>
+                  setSettings({
+                    ...settings,
+                    multibookCronBatchSize: Math.max(1, parseInt(e.target.value, 10) || 1),
+                  })
+                }
+                style={{
+                  width: "90px",
+                  padding: "6px 10px",
+                  backgroundColor: "#0F172A",
+                  border: "1px solid #334155",
+                  borderRadius: "6px",
+                  color: "#F8FAFC",
+                  fontSize: "0.9rem",
+                  fontWeight: 600,
+                }}
+              />
+              <span style={{ fontSize: "0.8rem", color: "#64748B" }}>
+                (e.g., 2, 5 or 10 syntheses per run)
+              </span>
             </div>
           </div>
 

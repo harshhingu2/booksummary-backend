@@ -26,15 +26,26 @@ export async function GET(request: NextRequest) {
 
     await connectDB();
 
-    // Fetch scraper setting (defaults to deepseek)
+    // Fetch scraper setting (defaults to deepseek) and batch limit
     const scraperSetting = await AdminSetting.findOne({
       key: { $in: ["individualAiScraper", "defaultAiScraper"] },
     });
     const scraperEngine: "chatgpt" | "deepseek" =
       scraperSetting?.value === "chatgpt" ? "chatgpt" : "deepseek";
 
-    // Find all individual books flagged for AI content generation
-    const pendingBooks = await IndividualBook.find({ needsContentGeneration: true }).limit(5);
+    const batchLimitSetting = await AdminSetting.findOne({
+      key: "individualCronBatchSize",
+    });
+    let batchLimit = 5;
+    if (batchLimitSetting && typeof batchLimitSetting.value !== "undefined") {
+      const parsed = parseInt(String(batchLimitSetting.value), 10);
+      if (!isNaN(parsed) && parsed > 0) {
+        batchLimit = Math.min(parsed, 50); // safety cap
+      }
+    }
+
+    // Find individual books flagged for AI content generation, limited to batchLimit
+    const pendingBooks = await IndividualBook.find({ needsContentGeneration: true }).limit(batchLimit);
 
     if (pendingBooks.length === 0) {
       return NextResponse.json({

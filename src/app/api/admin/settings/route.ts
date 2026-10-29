@@ -25,9 +25,17 @@ const DEFAULT_SETTINGS: Record<string, { value: any; description: string }> = {
     value: "deepseek",
     description: "Scraper engine used by Individual Books automated cron",
   },
+  individualCronBatchSize: {
+    value: 5,
+    description: "Max number of individual books processed per cron execution",
+  },
   multibookAiScraper: {
     value: "deepseek",
     description: "Scraper engine used by Multi-Book automated cron",
+  },
+  multibookCronBatchSize: {
+    value: 5,
+    description: "Max number of multi-book summaries processed per cron execution",
   },
 };
 
