@@ -58,6 +58,54 @@ export default function AdminIndividualBooksPage() {
   const [reviewDraftText, setReviewDraftText] = useState("");
   const [reviewTab, setReviewTab] = useState<"pending" | "preview" | "current">("preview");
   const [reviewActionLoading, setReviewActionLoading] = useState(false);
+  const [copiedKey, setCopiedKey] = useState<string | null>(null);
+
+  const htmlToPlainText = (html: string): string => {
+    if (!html) return "";
+    try {
+      const parser = new DOMParser();
+      const doc = parser.parseFromString(html, "text/html");
+      return (doc.body.innerText || doc.body.textContent || "").trim();
+    } catch {
+      return html
+        .replace(/<br\s*[\/]?>/gi, "\n")
+        .replace(/<\/p>/gi, "\n\n")
+        .replace(/<\/h[1-6]>/gi, "\n\n")
+        .replace(/<\/li>/gi, "\n")
+        .replace(/<[^>]+>/g, "")
+        .replace(/&nbsp;/g, " ")
+        .replace(/&amp;/g, "&")
+        .replace(/&lt;/g, "<")
+        .replace(/&gt;/g, ">")
+        .trim();
+    }
+  };
+
+  const copyToClipboard = async (text: string, key: string, label: string = "Content") => {
+    if (!text) return;
+    try {
+      if (navigator?.clipboard?.writeText) {
+        await navigator.clipboard.writeText(text);
+      } else {
+        const textarea = document.createElement("textarea");
+        textarea.value = text;
+        textarea.style.position = "fixed";
+        textarea.style.opacity = "0";
+        document.body.appendChild(textarea);
+        textarea.select();
+        document.execCommand("copy");
+        document.body.removeChild(textarea);
+      }
+      setCopiedKey(key);
+      setMessage({ text: `${label} copied to clipboard!`, type: "success" });
+      setTimeout(() => {
+        setCopiedKey((prev) => (prev === key ? null : prev));
+      }, 2000);
+    } catch (err: any) {
+      console.error("Failed to copy:", err);
+      setMessage({ text: "Failed to copy to clipboard", type: "error" });
+    }
+  };
 
   // Delete Confirmation State
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; title: string } | null>(null);
@@ -1219,8 +1267,54 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
             {/* Tab 1: Rendered HTML Preview */}
             {reviewTab === "preview" && (
               <div>
-                <div style={{ marginBottom: "8px", color: "#94A3B8", fontSize: "0.8rem" }}>
-                  Below is the visual live preview of the pending AI-generated HTML content:
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px", flexWrap: "wrap", gap: "8px" }}>
+                  <div style={{ color: "#94A3B8", fontSize: "0.8rem" }}>
+                    Below is the visual live preview of the pending AI-generated HTML content:
+                  </div>
+                  {reviewDraftText && (
+                    <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                      <button
+                        type="button"
+                        onClick={() => copyToClipboard(htmlToPlainText(reviewDraftText), "modal-review-preview-text", "Plain text summary")}
+                        title="Copy plain text without any HTML tags"
+                        style={{
+                          padding: "4px 10px",
+                          backgroundColor: copiedKey === "modal-review-preview-text" ? "#059669" : "#1E293B",
+                          color: copiedKey === "modal-review-preview-text" ? "#FFFFFF" : "#38BDF8",
+                          border: "1px solid #38BDF8",
+                          borderRadius: "6px",
+                          fontSize: "0.75rem",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "5px",
+                        }}
+                      >
+                        {copiedKey === "modal-review-preview-text" ? "✓ Copied Plain Text" : "📄 Copy Plain Text"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => copyToClipboard(reviewDraftText, "modal-review-preview", "Pending AI draft HTML")}
+                        title="Copy raw HTML markup"
+                        style={{
+                          padding: "4px 10px",
+                          backgroundColor: copiedKey === "modal-review-preview" ? "#059669" : "#334155",
+                          color: "#FFFFFF",
+                          border: "1px solid #475569",
+                          borderRadius: "6px",
+                          fontSize: "0.75rem",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "5px",
+                        }}
+                      >
+                        {copiedKey === "modal-review-preview" ? "✓ Copied HTML" : "📋 Copy HTML"}
+                      </button>
+                    </div>
+                  )}
                 </div>
                 {reviewDraftText ? (
                   <div
@@ -1249,7 +1343,27 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
               <div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
                   <label style={styles.label}>Pending AI Draft (Editable Raw HTML):</label>
-                  <span style={{ fontSize: "0.75rem", color: "#94A3B8" }}>{reviewDraftText.length} characters</span>
+                  <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                    <span style={{ fontSize: "0.75rem", color: "#94A3B8" }}>{reviewDraftText.length} characters</span>
+                    {reviewDraftText && (
+                      <button
+                        type="button"
+                        onClick={() => copyToClipboard(reviewDraftText, "modal-review-raw", "Pending AI draft content")}
+                        style={{
+                          padding: "3px 8px",
+                          backgroundColor: copiedKey === "modal-review-raw" ? "#059669" : "#334155",
+                          color: "#FFFFFF",
+                          border: "1px solid #475569",
+                          borderRadius: "4px",
+                          fontSize: "0.72rem",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                        }}
+                      >
+                        {copiedKey === "modal-review-raw" ? "✓ Copied" : "📋 Copy Raw HTML"}
+                      </button>
+                    )}
+                  </div>
                 </div>
                 <textarea
                   rows={16}
@@ -1268,8 +1382,54 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
             {/* Tab 3: Current Live Content */}
             {reviewTab === "current" && (
               <div>
-                <div style={{ marginBottom: "8px", color: "#94A3B8", fontSize: "0.8rem" }}>
-                  Current Live/Production Content:
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px", flexWrap: "wrap", gap: "8px" }}>
+                  <div style={{ color: "#94A3B8", fontSize: "0.8rem" }}>
+                    Current Live/Production Content:
+                  </div>
+                  {reviewBook.content && (
+                    <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                      <button
+                        type="button"
+                        onClick={() => copyToClipboard(htmlToPlainText(reviewBook.content), "modal-review-current-text", "Current live plain text")}
+                        title="Copy plain text without any HTML tags"
+                        style={{
+                          padding: "4px 10px",
+                          backgroundColor: copiedKey === "modal-review-current-text" ? "#059669" : "#1E293B",
+                          color: copiedKey === "modal-review-current-text" ? "#FFFFFF" : "#38BDF8",
+                          border: "1px solid #38BDF8",
+                          borderRadius: "6px",
+                          fontSize: "0.75rem",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "5px",
+                        }}
+                      >
+                        {copiedKey === "modal-review-current-text" ? "✓ Copied Plain Text" : "📄 Copy Plain Text"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => copyToClipboard(reviewBook.content, "modal-review-current", "Current live content")}
+                        title="Copy raw HTML markup"
+                        style={{
+                          padding: "4px 10px",
+                          backgroundColor: copiedKey === "modal-review-current" ? "#059669" : "#334155",
+                          color: "#FFFFFF",
+                          border: "1px solid #475569",
+                          borderRadius: "6px",
+                          fontSize: "0.75rem",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                          display: "inline-flex",
+                          alignItems: "center",
+                          gap: "5px",
+                        }}
+                      >
+                        {copiedKey === "modal-review-current" ? "✓ Copied HTML" : "📋 Copy HTML"}
+                      </button>
+                    </div>
+                  )}
                 </div>
                 {reviewBook.content ? (
                   <div
@@ -1677,32 +1837,50 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
               {/* Pending AI Generated Content Box (if exists) */}
               {formData.pendingContent && (
                 <div style={{ padding: "14px", backgroundColor: "#172554", borderRadius: "8px", border: "1px solid #1D4ED8" }}>
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px", flexWrap: "wrap", gap: "8px" }}>
                     <div style={{ color: "#93C5FD", fontSize: "0.85rem", fontWeight: 700 }}>
                       ⚡ Pending AI Generated Content (Awaiting Approval)
                     </div>
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          content: prev.pendingContent,
-                          contentStatus: "APPROVED",
-                        }))
-                      }
-                      style={{
-                        padding: "4px 10px",
-                        backgroundColor: "#10B981",
-                        color: "#FFFFFF",
-                        border: "none",
-                        borderRadius: "6px",
-                        fontSize: "0.75rem",
-                        fontWeight: 700,
-                        cursor: "pointer",
-                      }}
-                    >
-                      📋 Copy Pending to Live Content & Set Approved
-                    </button>
+                    <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
+                      <button
+                        type="button"
+                        onClick={() => copyToClipboard(formData.pendingContent || "", "modal-edit-pending", "Pending AI content")}
+                        style={{
+                          padding: "4px 10px",
+                          backgroundColor: copiedKey === "modal-edit-pending" ? "#059669" : "#1E293B",
+                          color: "#FFFFFF",
+                          border: "1px solid #3B82F6",
+                          borderRadius: "6px",
+                          fontSize: "0.75rem",
+                          fontWeight: 600,
+                          cursor: "pointer",
+                        }}
+                      >
+                        {copiedKey === "modal-edit-pending" ? "✓ Copied" : "📋 Copy to Clipboard"}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            content: prev.pendingContent,
+                            contentStatus: "APPROVED",
+                          }))
+                        }
+                        style={{
+                          padding: "4px 10px",
+                          backgroundColor: "#10B981",
+                          color: "#FFFFFF",
+                          border: "none",
+                          borderRadius: "6px",
+                          fontSize: "0.75rem",
+                          fontWeight: 700,
+                          cursor: "pointer",
+                        }}
+                      >
+                        📋 Copy Pending to Live Content & Set Approved
+                      </button>
+                    </div>
                   </div>
                   <textarea
                     rows={6}
@@ -1715,7 +1893,27 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
 
               {/* Rich Content (HTML or formatted text) */}
               <div>
-                <label style={styles.label}>Live Production Content (HTML formatted — Served to Users)</label>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "6px" }}>
+                  <label style={{ ...styles.label, marginBottom: 0 }}>Live Production Content (HTML formatted — Served to Users)</label>
+                  {formData.content && (
+                    <button
+                      type="button"
+                      onClick={() => copyToClipboard(formData.content, "modal-edit-live", "Live production content")}
+                      style={{
+                        padding: "3px 8px",
+                        backgroundColor: copiedKey === "modal-edit-live" ? "#059669" : "#334155",
+                        color: "#FFFFFF",
+                        border: "1px solid #475569",
+                        borderRadius: "4px",
+                        fontSize: "0.72rem",
+                        fontWeight: 600,
+                        cursor: "pointer",
+                      }}
+                    >
+                      {copiedKey === "modal-edit-live" ? "✓ Copied" : "📋 Copy Content"}
+                    </button>
+                  )}
+                </div>
                 <textarea
                   rows={8}
                   placeholder="<h2>1. Core Principle</h2><p>Summary paragraph...</p><blockquote>Quote</blockquote>"
