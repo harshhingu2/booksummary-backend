@@ -22,6 +22,7 @@ interface IndividualBookItem {
   topic: string;
   categoryId?: string | { _id: string; name: string; slug: string };
   coverImage: string;
+  colorCode?: string;
   audioUrl?: string;
   readingTimeMinutes: number;
   shortDescription?: string;
@@ -127,6 +128,7 @@ export default function AdminIndividualBooksPage() {
         "Author": "James Clear",
         "Category ID": "675b2f25b222a23e20839661",
         "Topic": "Productivity",
+        "Color Code": "#1B2A4A",
         "Short Description": "An easy and proven way to build good habits and break bad ones.",
         "Rank": 95,
         "Add AI Queue": "TRUE",
@@ -136,6 +138,7 @@ export default function AdminIndividualBooksPage() {
         "Author": "Cal Newport",
         "Category ID": "678d564e686f698d8b39ebb2",
         "Topic": "Career & Success",
+        "Color Code": "#064E3B",
         "Short Description": "Rules for focused success in a distracted world.",
         "Rank": 88,
         "Add AI Queue": "TRUE",
@@ -145,6 +148,7 @@ export default function AdminIndividualBooksPage() {
         "Author": "Morgan Housel",
         "Category ID": "67f512f106118edd1f93fc10",
         "Topic": "Money & Investments",
+        "Color Code": "#881337",
         "Short Description": "Timeless lessons on wealth, greed, and happiness.",
         "Rank": 85,
         "Add AI Queue": "FALSE",
@@ -231,6 +235,7 @@ export default function AdminIndividualBooksPage() {
     topic: "Productivity",
     categoryId: "",
     coverImage: "",
+    colorCode: "#1B2A4A",
     audioUrl: "",
     readingTimeMinutes: 12,
     rank: 0,
@@ -285,12 +290,18 @@ export default function AdminIndividualBooksPage() {
   const handleOpenAddModal = () => {
     setEditingId(null);
     const defaultCat = categories.find((c) => c.name.toLowerCase() === "productivity") || categories[0];
+    const curatedColors = [
+      "#1B2A4A", "#064E3B", "#881337", "#581C87", "#9A3412", "#134E4A",
+      "#854D0E", "#0F172A", "#312E81", "#365314", "#4C0519", "#1E3A8A"
+    ];
+    const randomColor = curatedColors[Math.floor(Math.random() * curatedColors.length)];
     setFormData({
       title: "",
       author: "",
       topic: defaultCat ? defaultCat.name : "Productivity",
       categoryId: defaultCat ? defaultCat._id : "",
       coverImage: "",
+      colorCode: randomColor,
       audioUrl: "",
       readingTimeMinutes: 12,
       rank: 0,
@@ -313,6 +324,7 @@ export default function AdminIndividualBooksPage() {
       topic: book.topic || "Productivity",
       categoryId: rawCatId,
       coverImage: book.coverImage || "",
+      colorCode: book.colorCode || "#1B2A4A",
       audioUrl: book.audioUrl || "",
       readingTimeMinutes: book.readingTimeMinutes || 12,
       rank: typeof book.rank === "number" ? book.rank : 0,
@@ -490,6 +502,7 @@ export default function AdminIndividualBooksPage() {
         topic: formData.topic,
         categoryId: formData.categoryId || undefined,
         coverImage: formData.coverImage,
+        colorCode: formData.colorCode || "#1B2A4A",
         audioUrl: formData.audioUrl,
         readingTimeMinutes: Number(formData.readingTimeMinutes) || 10,
         rank: Math.max(0, Math.min(100, Number(formData.rank) || 0)),
@@ -949,8 +962,8 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
                           <div style={{ width: "42px", height: "58px", borderRadius: "6px", backgroundColor: "#334155" }} />
                         )}
                         <div>
-                          <div style={{ fontWeight: 600, color: "#FFFFFF" }}>{book.title}</div>
-                          {book.author && <div style={{ fontSize: "0.8rem", color: "#94A3B8" }}>by {book.author}</div>}
+                          <div style={{ fontWeight: 700, color: "#FFFFFF", fontSize: "1.2rem", lineHeight: 1.3 }}>{book.title}</div>
+                          {book.author && <div style={{ fontSize: "0.9rem", color: "#94A3B8", marginTop: "3px" }}>by {book.author}</div>}
                           {hasPending && (
                             <span style={{ fontSize: "0.72rem", color: "#F59E0B", fontWeight: 600 }}>
                               ⚡ AI Draft Available ({book.pendingContent!.length} chars)
@@ -1200,8 +1213,8 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
                     Status: {reviewBook.contentStatus || "PENDING_REVIEW"}
                   </span>
                 </div>
-                <p style={{ color: "#94A3B8", fontSize: "0.85rem", margin: "4px 0 0 0" }}>
-                  Book: <strong style={{ color: "#F8FAFC" }}>{reviewBook.title}</strong> {reviewBook.author ? `by ${reviewBook.author}` : ""} ({reviewBook.topic})
+                <p style={{ color: "#94A3B8", fontSize: "1rem", margin: "6px 0 0 0" }}>
+                  Book: <strong style={{ color: "#F8FAFC", fontSize: "1.2rem" }}>{reviewBook.title}</strong> {reviewBook.author ? `by ${reviewBook.author}` : ""} ({reviewBook.topic})
                 </p>
               </div>
               <button
@@ -1773,12 +1786,11 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
 
               {/* Cover Image URL + Cloudflare R2 Upload */}
               <div>
-                <label style={styles.label}>Cover Image (URL or Upload to Cloudflare R2)</label>
+                <label style={styles.label}>Cover Image (URL or Upload to Cloudflare R2 - Optional)</label>
                 <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
                   <input
                     type="text"
-                    required
-                    placeholder="https://... or upload file"
+                    placeholder="https://... or upload file (leave blank for dynamic color cover)"
                     value={formData.coverImage}
                     onChange={(e) => setFormData({ ...formData, coverImage: e.target.value })}
                     style={{ ...styles.modalInput, flex: 1 }}
@@ -1794,15 +1806,114 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
                     />
                   </label>
                 </div>
-                {formData.coverImage && (
-                  <div style={{ marginTop: "8px" }}>
-                    <img
-                      src={formData.coverImage}
-                      alt="Cover Preview"
-                      style={{ width: "60px", height: "85px", borderRadius: "6px", objectFit: "cover" }}
+              </div>
+
+              {/* Dynamic Color Code & Live Cover Preview */}
+              <div style={{ backgroundColor: "#0F172A", padding: "14px", borderRadius: "8px", border: "1px solid #1E293B" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "8px" }}>
+                  <label style={{ ...styles.label, margin: 0 }}>
+                    🎨 Book Dynamic Cover Color <span style={{ color: "#94A3B8", fontSize: "0.75rem" }}>(Used when no cover image is uploaded)</span>
+                  </label>
+                  <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                    <input
+                      type="color"
+                      value={formData.colorCode || "#1B2A4A"}
+                      onChange={(e) => setFormData({ ...formData, colorCode: e.target.value })}
+                      style={{ cursor: "pointer", width: "32px", height: "32px", borderRadius: "6px", border: "none", background: "none" }}
+                    />
+                    <input
+                      type="text"
+                      value={formData.colorCode || "#1B2A4A"}
+                      onChange={(e) => setFormData({ ...formData, colorCode: e.target.value })}
+                      placeholder="#1B2A4A"
+                      style={{ ...styles.modalInput, width: "100px", padding: "4px 8px", fontSize: "0.85rem", textAlign: "center", fontFamily: "monospace" }}
                     />
                   </div>
-                )}
+                </div>
+
+                {/* Quick Color Swatches */}
+                <div style={{ display: "flex", flexWrap: "wrap", gap: "6px", marginBottom: "12px" }}>
+                  {[
+                    "#1B2A4A", "#064E3B", "#881337", "#581C87", "#9A3412", "#134E4A",
+                    "#854D0E", "#0F172A", "#312E81", "#365314", "#4C0519", "#1E3A8A",
+                    "#7C2D12", "#3B0764", "#1E293B", "#701A75"
+                  ].map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => setFormData({ ...formData, colorCode: c })}
+                      style={{
+                        width: "24px",
+                        height: "24px",
+                        borderRadius: "4px",
+                        backgroundColor: c,
+                        border: formData.colorCode?.toUpperCase() === c ? "2px solid #38BDF8" : "1px solid rgba(255,255,255,0.2)",
+                        cursor: "pointer",
+                        transform: formData.colorCode?.toUpperCase() === c ? "scale(1.15)" : "scale(1)",
+                        transition: "all 0.15s ease",
+                      }}
+                      title={c}
+                    />
+                  ))}
+                </div>
+
+                {/* Live Preview of Dynamic Book Cover */}
+                <div style={{ display: "flex", gap: "16px", alignItems: "center" }}>
+                  <div
+                    style={{
+                      width: "72px",
+                      height: "100px",
+                      borderRadius: "6px",
+                      backgroundColor: formData.colorCode || "#1B2A4A",
+                      border: "1px solid rgba(255,255,255,0.15)",
+                      boxShadow: "0 4px 10px rgba(0,0,0,0.4)",
+                      padding: "8px 6px",
+                      display: "flex",
+                      flexDirection: "column",
+                      justifyContent: "space-between",
+                      position: "relative",
+                      overflow: "hidden",
+                    }}
+                  >
+                    <div style={{ position: "absolute", top: 0, left: 0, width: "3px", height: "100%", backgroundColor: "rgba(255,255,255,0.25)" }} />
+                    <div
+                      style={{
+                        color: "#FFFFFF",
+                        fontSize: "0.82rem",
+                        fontWeight: 800,
+                        lineHeight: 1.2,
+                        wordBreak: "break-word",
+                        paddingLeft: "4px",
+                      }}
+                    >
+                      {formData.title.trim() || "Book Title"}
+                    </div>
+                    <div
+                      style={{
+                        color: "rgba(255,255,255,0.75)",
+                        fontSize: "0.55rem",
+                        fontWeight: 500,
+                        paddingLeft: "4px",
+                        whiteSpace: "nowrap",
+                        overflow: "hidden",
+                        textOverflow: "ellipsis",
+                      }}
+                    >
+                      {formData.author.trim() || "Author"}
+                    </div>
+                  </div>
+                  <div style={{ fontSize: "0.78rem", color: "#94A3B8", flex: 1 }}>
+                    {formData.coverImage ? (
+                      <span style={{ color: "#38BDF8" }}>
+                        ℹ️ Custom cover image is set. If the image fails to load or is removed, this stylized card is displayed automatically.
+                      </span>
+                    ) : (
+                      <span>
+                        ✅ This dynamic stylized cover will be rendered directly in the app with crisp typography and zero load time!
+                      </span>
+                    )}
+                  </div>
+                </div>
               </div>
 
               {/* Audiobook Audio URL + Cloudflare R2 Upload */}

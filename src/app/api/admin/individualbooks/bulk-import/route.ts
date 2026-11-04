@@ -6,6 +6,41 @@ import { IndividualBook } from "@/models/IndividualBook";
 import { Category } from "@/models/Category";
 import * as XLSX from "xlsx";
 
+// Curated luxury palette of distinct shades for book covers
+export const CURATED_BOOK_PALETTE = [
+  "#1B2A4A", // Deep Sapphire Navy
+  "#064E3B", // Emerald Forest
+  "#881337", // Crimson Wine
+  "#581C87", // Royal Plum
+  "#9A3412", // Burnt Terracotta
+  "#134E4A", // Dark Peacock Teal
+  "#854D0E", // Warm Ochre Gold
+  "#0F172A", // Midnight Charcoal
+  "#312E81", // Indigo Velvet
+  "#365314", // Olive Moss
+  "#4C0519", // Rosewood Maroon
+  "#1E3A8A", // Royal Cobalt
+  "#7C2D12", // Warm Rust Copper
+  "#3B0764", // Deep Eggplant
+  "#1E293B", // Steel Slate
+  "#701A75", // Deep Fuchsia
+  "#14532D", // Evergreen Pine
+  "#78350F", // Vintage Bronze
+];
+
+/**
+ * Deterministically pick an aesthetic color based on a string (e.g. title)
+ */
+function pickColorForString(str: string): string {
+  let hash = 0;
+  for (let i = 0; i < str.length; i++) {
+    hash = (hash << 5) - hash + str.charCodeAt(i);
+    hash |= 0;
+  }
+  const index = Math.abs(hash) % CURATED_BOOK_PALETTE.length;
+  return CURATED_BOOK_PALETTE[index];
+}
+
 /**
  * Robust CSV parser fallback if not binary excel
  */
@@ -271,12 +306,40 @@ export async function POST(req: NextRequest) {
         }
       }
 
+      // Parse color code (hex) or auto-assign a distinct curated shade
+      const rawColor = (
+        normalizedRow.colorcode ||
+        normalizedRow.color ||
+        normalizedRow.colourcode ||
+        normalizedRow.colour ||
+        normalizedRow.hex ||
+        row["Color Code"] ||
+        row["Colour Code"] ||
+        row.Color ||
+        row.Colour ||
+        ""
+      ).toString().trim();
+
+      let colorCode = "";
+      if (rawColor) {
+        // Ensure starting with # if valid hex
+        const cleanHex = rawColor.startsWith("#") ? rawColor : `#${rawColor}`;
+        if (/^#([0-9A-Fa-f]{3}){1,2}$/.test(cleanHex)) {
+          colorCode = cleanHex.toUpperCase();
+        }
+      }
+      if (!colorCode) {
+        // Auto-assign deterministically by title so every book has a distinct, consistent color
+        colorCode = pickColorForString(title);
+      }
+
       docsToInsert.push({
         title,
         author,
         topic: resolvedTopicName,
         categoryId,
         coverImage: "", // No image required for bulk import
+        colorCode,      // Dynamic cover color
         audioUrl: "",   // No audio required for bulk import
         readingTimeMinutes,
         shortDescription,

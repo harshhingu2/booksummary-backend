@@ -11,6 +11,7 @@ export interface IIndividualBook extends Document {
   topic?: string;
   categoryId?: mongoose.Types.ObjectId | string;
   coverImage: string;
+  colorCode?: string; // Hex color code (e.g. #1E293B) for dynamic book cover styling
   audioUrl?: string; // Audiobook or audio narration URL in Cloudflare R2
   readingTimeMinutes: number;
   shortDescription?: string;
@@ -38,6 +39,7 @@ const IndividualBookSchema = new Schema<IIndividualBook>(
     topic: { type: String, default: "", index: true }, // Legacy topic string
     categoryId: { type: Schema.Types.ObjectId, ref: "Category", index: true }, // Category reference
     coverImage: { type: String, default: "" },
+    colorCode: { type: String, default: "" },
     audioUrl: { type: String, default: "" },
     readingTimeMinutes: { type: Number, default: 12 },
     shortDescription: { type: String, default: "" },
