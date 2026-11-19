@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import ConfirmDeleteModal from "@/components/ConfirmDeleteModal";
+import QueueEstimateInfo from "@/components/QueueEstimateInfo";
 
 interface CronItem {
   _id: string;
@@ -41,6 +42,10 @@ export default function AdminCronsPage() {
   const [cronSecret, setCronSecret] = useState<string>("");
   const [copiedWebhook, setCopiedWebhook] = useState(false);
   const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
+  const [queueStats, setQueueStats] = useState<{
+    individual?: { queueCount: number; batchLimit: number };
+    multibook?: { queueCount: number; batchLimit: number };
+  }>({});
 
   // Modal State
   const [showModal, setShowModal] = useState(false);
@@ -74,6 +79,9 @@ export default function AdminCronsPage() {
         }
         if (data.cronSecret) {
           setCronSecret(data.cronSecret);
+        }
+        if (data.queueStats) {
+          setQueueStats(data.queueStats);
         }
       }
     } catch (err) {
@@ -329,6 +337,30 @@ export default function AdminCronsPage() {
                 <tr key={job._id} style={styles.tr}>
                   <td style={styles.tdName}>
                     <div style={{ fontWeight: 600, color: "#F8FAFC" }}>{job.name}</div>
+                    {job.endpoint.includes("individual-content") && queueStats.individual && (
+                      <div style={{ marginTop: "6px" }}>
+                        <QueueEstimateInfo
+                          queueCount={queueStats.individual.queueCount}
+                          batchLimit={queueStats.individual.batchLimit}
+                          cronSchedule={job.schedule}
+                          isCronActive={job.isActive}
+                          title="Individual Books Queue Estimate"
+                          itemLabel="books"
+                        />
+                      </div>
+                    )}
+                    {job.endpoint.includes("multibook-content") && queueStats.multibook && (
+                      <div style={{ marginTop: "6px" }}>
+                        <QueueEstimateInfo
+                          queueCount={queueStats.multibook.queueCount}
+                          batchLimit={queueStats.multibook.batchLimit}
+                          cronSchedule={job.schedule}
+                          isCronActive={job.isActive}
+                          title="Multi-Book Syntheses Queue Estimate"
+                          itemLabel="summaries"
+                        />
+                      </div>
+                    )}
                   </td>
                   <td style={styles.tdCode}>
                     <div style={{ fontWeight: 600, color: "#38BDF8" }}>{getCronHumanLabel(job.schedule)}</div>

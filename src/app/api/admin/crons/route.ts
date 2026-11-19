@@ -6,6 +6,9 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { connectDB } from "@/lib/db";
 import { CronJob } from "@/models/CronJob";
+import { IndividualBook } from "@/models/IndividualBook";
+import { BookSummary } from "@/models/Book";
+import { AdminSetting } from "@/models/AdminSetting";
 import { reloadCronSchedules, getActiveCronCount, isCronManagerInitialized } from "@/lib/cron";
 import cron from "node-cron";
 
@@ -70,6 +73,25 @@ export async function GET() {
     const isInitialized = isCronManagerInitialized();
     const cronSecret = process.env.CRON_SECRET || "dumbscroll_cron_secret_2026_v1";
 
+    // Query AI queue counts and settings for queue estimation calculations
+    const [individualQueueCount, multibookQueueCount, individualBatchDoc, multibookBatchDoc] = await Promise.all([
+      IndividualBook.countDocuments({ needsContentGeneration: true }),
+      BookSummary.countDocuments({ needsContentGeneration: true }),
+      AdminSetting.findOne({ key: "individualCronBatchSize" }),
+      AdminSetting.findOne({ key: "multibookCronBatchSize" }),
+    ]);
+
+    const queueStats = {
+      individual: {
+        queueCount: individualQueueCount,
+        batchLimit: individualBatchDoc && !isNaN(Number(individualBatchDoc.value)) ? Number(individualBatchDoc.value) : 5,
+      },
+      multibook: {
+        queueCount: multibookQueueCount,
+        batchLimit: multibookBatchDoc && !isNaN(Number(multibookBatchDoc.value)) ? Number(multibookBatchDoc.value) : 5,
+      },
+    };
+
     return NextResponse.json({
       success: true,
       crons,
@@ -77,6 +99,7 @@ export async function GET() {
       activeTasksCount,
       isInitialized,
       cronSecret,
+      queueStats,
     });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });

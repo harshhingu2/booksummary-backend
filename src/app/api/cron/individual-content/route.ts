@@ -26,12 +26,12 @@ export async function GET(request: NextRequest) {
 
     await connectDB();
 
-    // Fetch scraper setting (defaults to deepseek) and batch limit
-    const scraperSetting = await AdminSetting.findOne({
-      key: { $in: ["individualAiScraper", "defaultAiScraper"] },
-    });
+    // Fetch specific scraper setting first, fallback to defaultAiScraper
+    const individualSetting = await AdminSetting.findOne({ key: "individualAiScraper" });
+    const defaultSetting = !individualSetting ? await AdminSetting.findOne({ key: "defaultAiScraper" }) : null;
+    const selectedScraperValue = individualSetting?.value ?? defaultSetting?.value;
     const scraperEngine: "chatgpt" | "deepseek" =
-      scraperSetting?.value === "chatgpt" ? "chatgpt" : "deepseek";
+      String(selectedScraperValue).toLowerCase() === "chatgpt" ? "chatgpt" : "deepseek";
 
     const batchLimitSetting = await AdminSetting.findOne({
       key: "individualCronBatchSize",
@@ -43,6 +43,12 @@ export async function GET(request: NextRequest) {
         batchLimit = Math.min(parsed, 50); // safety cap
       }
     }
+
+    // Fetch random delay range settings (default: 30s to 150s [2.5 mins])
+    const minDelaySetting = await AdminSetting.findOne({ key: "individualCronMinDelaySeconds" });
+    const maxDelaySetting = await AdminSetting.findOne({ key: "individualCronMaxDelaySeconds" });
+    const minDelaySec = minDelaySetting && !isNaN(Number(minDelaySetting.value)) ? Math.max(0, Number(minDelaySetting.value)) : 30;
+    const maxDelaySec = maxDelaySetting && !isNaN(Number(maxDelaySetting.value)) ? Math.max(minDelaySec, Number(maxDelaySetting.value)) : 150;
 
     // Find individual books flagged for AI content generation, limited to batchLimit
     const pendingBooks = await IndividualBook.find({ needsContentGeneration: true }).limit(batchLimit);
@@ -139,8 +145,15 @@ export async function GET(request: NextRequest) {
         results.push({ id: book._id.toString(), title: book.title, success: true });
         console.log(`[Cron Individual AI] Completed "${book.title}". Browser closed cleanly.`);
 
-        // Short pause between sequential books to allow full process and profile release
-        await new Promise((resolve) => setTimeout(resolve, 3000));
+        // Anti-bot randomized pause between sequential scrapings if there are more books in this batch
+        if (results.length < pendingBooks.length) {
+          const randomDelaySec = Math.floor(Math.random() * (maxDelaySec - minDelaySec + 1)) + minDelaySec;
+          console.log(`[Cron Individual AI] Anti-bot human delay: waiting ${randomDelaySec}s (${(randomDelaySec / 60).toFixed(1)} mins) before processing next book...`);
+          await new Promise((resolve) => setTimeout(resolve, randomDelaySec * 1000));
+        } else {
+          // Minimal 3s cooldown after the last book in the batch
+          await new Promise((resolve) => setTimeout(resolve, 3000));
+        }
       } catch (err: any) {
         console.error(`[Cron Individual AI Error] Failed for "${book.title}":`, err.message);
         results.push({ id: book._id.toString(), title: book.title, success: false, error: err.message });

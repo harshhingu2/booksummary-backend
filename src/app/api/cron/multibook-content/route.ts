@@ -26,12 +26,12 @@ export async function GET(request: NextRequest) {
 
     await connectDB();
 
-    // Fetch scraper setting (defaults to deepseek) and batch limit
-    const scraperSetting = await AdminSetting.findOne({
-      key: { $in: ["multibookAiScraper", "defaultAiScraper"] },
-    });
+    // Fetch specific scraper setting first, fallback to defaultAiScraper
+    const multibookSetting = await AdminSetting.findOne({ key: "multibookAiScraper" });
+    const defaultSetting = !multibookSetting ? await AdminSetting.findOne({ key: "defaultAiScraper" }) : null;
+    const selectedScraperValue = multibookSetting?.value ?? defaultSetting?.value;
     const scraperEngine: "chatgpt" | "deepseek" =
-      scraperSetting?.value === "chatgpt" ? "chatgpt" : "deepseek";
+      String(selectedScraperValue).toLowerCase() === "chatgpt" ? "chatgpt" : "deepseek";
 
     const batchLimitSetting = await AdminSetting.findOne({
       key: "multibookCronBatchSize",
@@ -43,6 +43,12 @@ export async function GET(request: NextRequest) {
         batchLimit = Math.min(parsed, 50); // safety cap
       }
     }
+
+    // Fetch random delay range settings (default: 30s to 150s [2.5 mins])
+    const minDelaySetting = await AdminSetting.findOne({ key: "multibookCronMinDelaySeconds" });
+    const maxDelaySetting = await AdminSetting.findOne({ key: "multibookCronMaxDelaySeconds" });
+    const minDelaySec = minDelaySetting && !isNaN(Number(minDelaySetting.value)) ? Math.max(0, Number(minDelaySetting.value)) : 30;
+    const maxDelaySec = maxDelaySetting && !isNaN(Number(maxDelaySetting.value)) ? Math.max(minDelaySec, Number(maxDelaySetting.value)) : 150;
 
     // Find multi-book summaries flagged for AI content generation, limited to batchLimit
     const pendingSummaries = await BookSummary.find({ needsContentGeneration: true }).limit(batchLimit);
@@ -134,8 +140,15 @@ export async function GET(request: NextRequest) {
         results.push({ id: summary._id.toString(), title: summary.title, success: true });
         console.log(`[Cron MultiBook AI] Completed "${summary.title}". Browser closed cleanly.`);
 
-        // Short pause between sequential summaries to allow full process and profile release
-        await new Promise((resolve) => setTimeout(resolve, 3000));
+        // Anti-bot randomized pause between sequential scrapings if there are more items in this batch
+        if (results.length < pendingSummaries.length) {
+          const randomDelaySec = Math.floor(Math.random() * (maxDelaySec - minDelaySec + 1)) + minDelaySec;
+          console.log(`[Cron MultiBook AI] Anti-bot human delay: waiting ${randomDelaySec}s (${(randomDelaySec / 60).toFixed(1)} mins) before processing next summary...`);
+          await new Promise((resolve) => setTimeout(resolve, randomDelaySec * 1000));
+        } else {
+          // Minimal 3s cooldown after the last summary in the batch
+          await new Promise((resolve) => setTimeout(resolve, 3000));
+        }
       } catch (err: any) {
         console.error(`[Cron MultiBook AI Error] Failed for "${summary.title}":`, err.message);
         results.push({ id: summary._id.toString(), title: summary.title, success: false, error: err.message });

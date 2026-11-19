@@ -27,7 +27,15 @@ const DEFAULT_SETTINGS: Record<string, { value: any; description: string }> = {
   },
   individualCronBatchSize: {
     value: 5,
-    description: "Max number of individual books processed per cron execution",
+    description: "Max number of individual books processed per cron execution (scraping stop limit)",
+  },
+  individualCronMinDelaySeconds: {
+    value: 30,
+    description: "Minimum random delay in seconds between scraping individual books (anti-bot protection)",
+  },
+  individualCronMaxDelaySeconds: {
+    value: 150,
+    description: "Maximum random delay in seconds between scraping individual books (anti-bot protection)",
   },
   multibookAiScraper: {
     value: "deepseek",
@@ -35,7 +43,15 @@ const DEFAULT_SETTINGS: Record<string, { value: any; description: string }> = {
   },
   multibookCronBatchSize: {
     value: 5,
-    description: "Max number of multi-book summaries processed per cron execution",
+    description: "Max number of multi-book summaries processed per cron execution (scraping stop limit)",
+  },
+  multibookCronMinDelaySeconds: {
+    value: 30,
+    description: "Minimum random delay in seconds between scraping multi-book syntheses (anti-bot protection)",
+  },
+  multibookCronMaxDelaySeconds: {
+    value: 150,
+    description: "Maximum random delay in seconds between scraping multi-book syntheses (anti-bot protection)",
   },
 };
 

@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import ConfirmDeleteModal from "@/components/ConfirmDeleteModal";
+import QueueEstimateInfo from "@/components/QueueEstimateInfo";
 
 interface Chapter {
   chapterNumber: number;
@@ -41,6 +42,21 @@ export default function AdminBooksPage() {
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [contentStatusFilter, setContentStatusFilter] = useState("ALL");
   const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
+
+  // AI Queue & Cron Information for estimation calculations
+  const [queueInfo, setQueueInfo] = useState<{
+    queuedCount: number;
+    batchLimit: number;
+    cronSchedule: string;
+    isCronActive: boolean;
+    cronName: string;
+  }>({
+    queuedCount: 0,
+    batchLimit: 5,
+    cronSchedule: "*/15 * * * *",
+    isCronActive: true,
+    cronName: "Multi-Book AI Content Ingestion",
+  });
 
   // Modal State for Add & Edit
   const [showModal, setShowModal] = useState(false);
@@ -88,6 +104,9 @@ export default function AdminBooksPage() {
       const data = await res.json();
       if (data.success) {
         setBooks(data.books);
+        if (data.queueInfo) {
+          setQueueInfo(data.queueInfo);
+        }
       }
     } catch (err) {
       console.error("Error fetching books:", err);
@@ -363,6 +382,10 @@ export default function AdminBooksPage() {
       const data = await res.json();
       if (data.success) {
         setBooks((prev) => prev.map((b) => (b._id === book._id ? { ...b, needsContentGeneration: nextVal } : b)));
+        setQueueInfo((prev) => ({
+          ...prev,
+          queuedCount: Math.max(0, prev.queuedCount + (nextVal ? 1 : -1)),
+        }));
         setMessage({
           text: nextVal ? `"${book.title}" queued for automated Multi-Book Cron AI generation!` : `Removed "${book.title}" from AI Cron queue.`,
           type: "success",

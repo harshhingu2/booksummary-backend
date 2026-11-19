@@ -6,8 +6,12 @@ interface SettingsState {
   defaultAiScraper: "deepseek" | "chatgpt";
   individualAiScraper: "deepseek" | "chatgpt";
   individualCronBatchSize: number;
+  individualCronMinDelaySeconds: number;
+  individualCronMaxDelaySeconds: number;
   multibookAiScraper: "deepseek" | "chatgpt";
   multibookCronBatchSize: number;
+  multibookCronMinDelaySeconds: number;
+  multibookCronMaxDelaySeconds: number;
 }
 
 export default function AdminSettingsPage() {
@@ -15,8 +19,12 @@ export default function AdminSettingsPage() {
     defaultAiScraper: "deepseek",
     individualAiScraper: "deepseek",
     individualCronBatchSize: 5,
+    individualCronMinDelaySeconds: 30,
+    individualCronMaxDelaySeconds: 150,
     multibookAiScraper: "deepseek",
     multibookCronBatchSize: 5,
+    multibookCronMinDelaySeconds: 30,
+    multibookCronMaxDelaySeconds: 150,
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -32,8 +40,12 @@ export default function AdminSettingsPage() {
           defaultAiScraper: data.settings.defaultAiScraper || "deepseek",
           individualAiScraper: data.settings.individualAiScraper || "deepseek",
           individualCronBatchSize: Number(data.settings.individualCronBatchSize) || 5,
+          individualCronMinDelaySeconds: Number(data.settings.individualCronMinDelaySeconds) ?? 30,
+          individualCronMaxDelaySeconds: Number(data.settings.individualCronMaxDelaySeconds) ?? 150,
           multibookAiScraper: data.settings.multibookAiScraper || "deepseek",
           multibookCronBatchSize: Number(data.settings.multibookCronBatchSize) || 5,
+          multibookCronMinDelaySeconds: Number(data.settings.multibookCronMinDelaySeconds) ?? 30,
+          multibookCronMaxDelaySeconds: Number(data.settings.multibookCronMaxDelaySeconds) ?? 150,
         });
       }
     } catch (err) {
@@ -167,9 +179,9 @@ export default function AdminSettingsPage() {
               </label>
             </div>
 
-            <div style={{ marginTop: "12px", display: "flex", alignItems: "center", gap: "12px" }}>
+            <div style={{ marginTop: "14px", display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
               <label style={{ fontSize: "0.85rem", color: "#CBD5E1", fontWeight: 600 }}>
-                Books per Cron Execution (Batch Size):
+                Stop Cron After (Execution Limit / Batch Size):
               </label>
               <input
                 type="number"
@@ -194,7 +206,68 @@ export default function AdminSettingsPage() {
                 }}
               />
               <span style={{ fontSize: "0.8rem", color: "#64748B" }}>
-                (e.g., 5 or 10 books per run. Prevents AI rate limits & timeouts)
+                (Processes first X books from queue and stops. Next run continues with the remaining)
+              </span>
+            </div>
+
+            <div style={{ marginTop: "12px", display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap", padding: "10px 14px", backgroundColor: "rgba(15, 23, 42, 0.6)", borderRadius: "8px", border: "1px solid #1E293B" }}>
+              <label style={{ fontSize: "0.85rem", color: "#38BDF8", fontWeight: 600 }}>
+                Anti-Bot Random Delay Range (between scrapes):
+              </label>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <span style={{ fontSize: "0.8rem", color: "#94A3B8" }}>Min:</span>
+                <input
+                  type="number"
+                  min={5}
+                  max={300}
+                  value={settings.individualCronMinDelaySeconds}
+                  onChange={(e) =>
+                    setSettings({
+                      ...settings,
+                      individualCronMinDelaySeconds: Math.max(0, parseInt(e.target.value, 10) || 0),
+                    })
+                  }
+                  style={{
+                    width: "75px",
+                    padding: "6px 10px",
+                    backgroundColor: "#0F172A",
+                    border: "1px solid #334155",
+                    borderRadius: "6px",
+                    color: "#F8FAFC",
+                    fontSize: "0.85rem",
+                    fontWeight: 600,
+                  }}
+                />
+                <span style={{ fontSize: "0.8rem", color: "#94A3B8" }}>s</span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <span style={{ fontSize: "0.8rem", color: "#94A3B8" }}>Max:</span>
+                <input
+                  type="number"
+                  min={10}
+                  max={600}
+                  value={settings.individualCronMaxDelaySeconds}
+                  onChange={(e) =>
+                    setSettings({
+                      ...settings,
+                      individualCronMaxDelaySeconds: Math.max(1, parseInt(e.target.value, 10) || 1),
+                    })
+                  }
+                  style={{
+                    width: "75px",
+                    padding: "6px 10px",
+                    backgroundColor: "#0F172A",
+                    border: "1px solid #334155",
+                    borderRadius: "6px",
+                    color: "#F8FAFC",
+                    fontSize: "0.85rem",
+                    fontWeight: 600,
+                  }}
+                />
+                <span style={{ fontSize: "0.8rem", color: "#94A3B8" }}>s</span>
+              </div>
+              <span style={{ fontSize: "0.78rem", color: "#64748B" }}>
+                (Default: 30s to 150s [2.5 mins]. Randomized intervals mimic human browsing & bypass bot detection)
               </span>
             </div>
           </div>
@@ -256,9 +329,9 @@ export default function AdminSettingsPage() {
               </label>
             </div>
 
-            <div style={{ marginTop: "12px", display: "flex", alignItems: "center", gap: "12px" }}>
+            <div style={{ marginTop: "14px", display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
               <label style={{ fontSize: "0.85rem", color: "#CBD5E1", fontWeight: 600 }}>
-                Syntheses per Cron Execution (Batch Size):
+                Stop Cron After (Execution Limit / Batch Size):
               </label>
               <input
                 type="number"
@@ -283,7 +356,68 @@ export default function AdminSettingsPage() {
                 }}
               />
               <span style={{ fontSize: "0.8rem", color: "#64748B" }}>
-                (e.g., 2, 5 or 10 syntheses per run)
+                (Processes first X syntheses from queue and stops. Next run continues with the remaining)
+              </span>
+            </div>
+
+            <div style={{ marginTop: "12px", display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap", padding: "10px 14px", backgroundColor: "rgba(15, 23, 42, 0.6)", borderRadius: "8px", border: "1px solid #1E293B" }}>
+              <label style={{ fontSize: "0.85rem", color: "#A78BFA", fontWeight: 600 }}>
+                Anti-Bot Random Delay Range (between scrapes):
+              </label>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <span style={{ fontSize: "0.8rem", color: "#94A3B8" }}>Min:</span>
+                <input
+                  type="number"
+                  min={5}
+                  max={300}
+                  value={settings.multibookCronMinDelaySeconds}
+                  onChange={(e) =>
+                    setSettings({
+                      ...settings,
+                      multibookCronMinDelaySeconds: Math.max(0, parseInt(e.target.value, 10) || 0),
+                    })
+                  }
+                  style={{
+                    width: "75px",
+                    padding: "6px 10px",
+                    backgroundColor: "#0F172A",
+                    border: "1px solid #334155",
+                    borderRadius: "6px",
+                    color: "#F8FAFC",
+                    fontSize: "0.85rem",
+                    fontWeight: 600,
+                  }}
+                />
+                <span style={{ fontSize: "0.8rem", color: "#94A3B8" }}>s</span>
+              </div>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <span style={{ fontSize: "0.8rem", color: "#94A3B8" }}>Max:</span>
+                <input
+                  type="number"
+                  min={10}
+                  max={600}
+                  value={settings.multibookCronMaxDelaySeconds}
+                  onChange={(e) =>
+                    setSettings({
+                      ...settings,
+                      multibookCronMaxDelaySeconds: Math.max(1, parseInt(e.target.value, 10) || 1),
+                    })
+                  }
+                  style={{
+                    width: "75px",
+                    padding: "6px 10px",
+                    backgroundColor: "#0F172A",
+                    border: "1px solid #334155",
+                    borderRadius: "6px",
+                    color: "#F8FAFC",
+                    fontSize: "0.85rem",
+                    fontWeight: 600,
+                  }}
+                />
+                <span style={{ fontSize: "0.8rem", color: "#94A3B8" }}>s</span>
+              </div>
+              <span style={{ fontSize: "0.78rem", color: "#64748B" }}>
+                (Default: 30s to 150s. Randomized pauses between processing queued syntheses)
               </span>
             </div>
           </div>

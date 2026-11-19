@@ -2,6 +2,7 @@
 
 import React, { useState, useEffect, useRef } from "react";
 import ConfirmDeleteModal from "@/components/ConfirmDeleteModal";
+import QueueEstimateInfo from "@/components/QueueEstimateInfo";
 import * as XLSX from "xlsx";
 
 interface Chapter {
@@ -45,6 +46,21 @@ export default function AdminIndividualBooksPage() {
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [contentStatusFilter, setContentStatusFilter] = useState("ALL");
   const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
+
+  // AI Queue & Cron Information for estimation calculations
+  const [queueInfo, setQueueInfo] = useState<{
+    queuedCount: number;
+    batchLimit: number;
+    cronSchedule: string;
+    isCronActive: boolean;
+    cronName: string;
+  }>({
+    queuedCount: 0,
+    batchLimit: 5,
+    cronSchedule: "*/15 * * * *",
+    isCronActive: true,
+    cronName: "Individual Books AI Content Ingestion",
+  });
 
   // Modal State for Add & Edit
   const [showModal, setShowModal] = useState(false);
@@ -217,6 +233,9 @@ export default function AdminIndividualBooksPage() {
         setBulkFile(null);
         setBulkPreview([]);
         if (fileInputRef.current) fileInputRef.current.value = "";
+        if (data.importedCount) {
+          setQueueInfo((prev) => ({ ...prev, queuedCount: prev.queuedCount + Number(data.importedCount) }));
+        }
         fetchBooks();
       } else {
         setBulkError(data.error || "Failed to import books.");
@@ -259,6 +278,9 @@ export default function AdminIndividualBooksPage() {
       const data = await res.json();
       if (data.success) {
         setBooks(data.books);
+        if (data.queueInfo) {
+          setQueueInfo(data.queueInfo);
+        }
       }
     } catch (err) {
       console.error("Error fetching individual books:", err);
@@ -530,6 +552,20 @@ export default function AdminIndividualBooksPage() {
           type: "success",
         });
         setShowModal(false);
+        if (editingId) {
+          const oldBook = books.find((b) => b._id === editingId);
+          if (oldBook && Boolean(oldBook.needsContentGeneration) !== Boolean(formData.needsContentGeneration)) {
+            setQueueInfo((prev) => ({
+              ...prev,
+              queuedCount: Math.max(0, prev.queuedCount + (formData.needsContentGeneration ? 1 : -1)),
+            }));
+          }
+        } else if (formData.needsContentGeneration) {
+          setQueueInfo((prev) => ({
+            ...prev,
+            queuedCount: prev.queuedCount + 1,
+          }));
+        }
         fetchBooks();
       } else {
         setMessage({ text: data.error || "Failed to save book", type: "error" });
@@ -552,6 +588,10 @@ export default function AdminIndividualBooksPage() {
       const data = await res.json();
       if (data.success) {
         setBooks((prev) => prev.map((b) => (b._id === book._id ? { ...b, needsContentGeneration: nextVal } : b)));
+        setQueueInfo((prev) => ({
+          ...prev,
+          queuedCount: Math.max(0, prev.queuedCount + (nextVal ? 1 : -1)),
+        }));
         setMessage({
           text: nextVal ? `"${book.title}" queued for automated Cron AI generation!` : `Removed "${book.title}" from AI Cron queue.`,
           type: "success",
@@ -754,6 +794,13 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
       const data = await res.json();
       if (data.success) {
         setMessage({ text: `"${deleteTarget.title}" deleted successfully`, type: "success" });
+        const deletedBook = books.find((b) => b._id === deleteTarget.id);
+        if (deletedBook?.needsContentGeneration) {
+          setQueueInfo((prev) => ({
+            ...prev,
+            queuedCount: Math.max(0, prev.queuedCount - 1),
+          }));
+        }
         setDeleteTarget(null);
         fetchBooks();
       } else {
@@ -774,6 +821,16 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
           <p style={styles.subtitle}>
             Manage individual books, pending AI drafts & review workflow, HTML content, and Cloudflare R2 media
           </p>
+          <div style={{ marginTop: "8px" }}>
+            <QueueEstimateInfo
+              queueCount={queueInfo.queuedCount}
+              batchLimit={queueInfo.batchLimit}
+              cronSchedule={queueInfo.cronSchedule}
+              isCronActive={queueInfo.isCronActive}
+              title="Individual Books AI Queue Forecast"
+              itemLabel="books"
+            />
+          </div>
         </div>
         <div style={{ display: "flex", gap: "10px", alignItems: "center" }}>
           <button
@@ -2203,6 +2260,7 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
                           <th style={{ padding: "8px 12px", textAlign: "left" }}>Title</th>
                           <th style={{ padding: "8px 12px", textAlign: "left" }}>Author</th>
                           <th style={{ padding: "8px 12px", textAlign: "left" }}>Category / ID</th>
+                          <th style={{ padding: "8px 12px", textAlign: "center" }}>Color</th>
                           <th style={{ padding: "8px 12px", textAlign: "center" }}>Rank (0-100)</th>
                           <th style={{ padding: "8px 12px", textAlign: "center" }}>AI Queue</th>
                         </tr>
@@ -2214,6 +2272,7 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
                           const rankVal = row.Rank ?? row.rank ?? row.Ranking ?? row.ranking ?? 0;
                           const catIdVal = row["Category ID"] ?? row["category id"] ?? row["categoryid"] ?? row.categoryId ?? "";
                           const topicVal = row.Topic ?? row.topic ?? row.Category ?? row.category ?? "Productivity";
+                          const colorVal = row["Color Code"] ?? row["Colour Code"] ?? row.Color ?? row.Colour ?? row.colorcode ?? row.hex ?? "";
                           return (
                             <tr key={idx} style={{ borderBottom: "1px solid #1E293B" }}>
                               <td style={{ padding: "8px 12px", color: "#F8FAFC" }}>{row.Title || row.title || row.Name || "—"}</td>
@@ -2224,6 +2283,16 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
                                   <div style={{ color: "#64748B", fontSize: "0.7rem", fontFamily: "monospace" }}>
                                     {String(catIdVal).slice(0, 10)}...
                                   </div>
+                                )}
+                              </td>
+                              <td style={{ padding: "8px 12px", textAlign: "center" }}>
+                                {colorVal ? (
+                                  <div style={{ display: "inline-flex", alignItems: "center", gap: "6px" }}>
+                                    <span style={{ width: "12px", height: "12px", borderRadius: "3px", backgroundColor: colorVal, display: "inline-block", border: "1px solid rgba(255,255,255,0.2)" }} />
+                                    <span style={{ fontFamily: "monospace", fontSize: "0.75rem", color: "#CBD5E1" }}>{colorVal}</span>
+                                  </div>
+                                ) : (
+                                  <span style={{ color: "#64748B", fontSize: "0.75rem" }}>Auto</span>
                                 )}
                               </td>
                               <td style={{ padding: "8px 12px", textAlign: "center", color: "#34D399", fontWeight: 700 }}>

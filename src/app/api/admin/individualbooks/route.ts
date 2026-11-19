@@ -7,6 +7,8 @@ import { authOptions } from "@/lib/auth";
 import { connectDB } from "@/lib/db";
 import { IndividualBook } from "@/models/IndividualBook";
 import { Category } from "@/models/Category";
+import { CronJob } from "@/models/CronJob";
+import { AdminSetting } from "@/models/AdminSetting";
 
 async function verifyAdminAuth() {
   const session = await getServerSession(authOptions);
@@ -52,12 +54,28 @@ export async function GET(request: NextRequest) {
       query.contentStatus = contentStatus;
     }
 
-    const books = await IndividualBook.find(query).populate("categoryId", "name slug").sort({ rank: -1, createdAt: -1 });
+    const [books, queuedCount, cronJobDoc, batchSizeDoc] = await Promise.all([
+      IndividualBook.find(query).populate("categoryId", "name slug").sort({ rank: -1, createdAt: -1 }),
+      IndividualBook.countDocuments({ needsContentGeneration: true }),
+      CronJob.findOne({ endpoint: { $regex: "individual-content" } }),
+      AdminSetting.findOne({ key: "individualCronBatchSize" }),
+    ]);
+
+    const batchLimit = batchSizeDoc && !isNaN(Number(batchSizeDoc.value)) ? Number(batchSizeDoc.value) : 5;
+    const cronSchedule = cronJobDoc?.schedule || "*/15 * * * *";
+    const isCronActive = cronJobDoc ? !!cronJobDoc.isActive : false;
 
     return NextResponse.json({
       success: true,
       books,
       count: books.length,
+      queueInfo: {
+        queuedCount,
+        batchLimit,
+        cronSchedule,
+        isCronActive,
+        cronName: cronJobDoc?.name || "Individual Books AI Content Ingestion",
+      },
     });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });

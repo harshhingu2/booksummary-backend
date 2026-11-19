@@ -14,6 +14,15 @@ const USER_DATA_DIR = path.resolve(__dirname, '../.chatgpt_profile');
 const PUBLIC_DIR = path.resolve(__dirname, '../public');
 const DEBUG_SCREENSHOT_PATH = path.join(PUBLIC_DIR, 'debug_chatgpt.png');
 
+// Load environment variables if available
+const envLocalPath = path.resolve(__dirname, '../.env.local');
+const envPath = path.resolve(__dirname, '../.env');
+if (fs.existsSync(envLocalPath)) {
+  try { process.loadEnvFile(envLocalPath); } catch {}
+} else if (fs.existsSync(envPath)) {
+  try { process.loadEnvFile(envPath); } catch {}
+}
+
 async function saveDebugScreenshot(page, stepName) {
   try {
     if (!fs.existsSync(PUBLIC_DIR)) {
@@ -310,7 +319,7 @@ async function handleLoginMode() {
     } catch {}
     console.log('\n======================================================');
     console.log('1. Log into your OpenAI / ChatGPT account in the browser.');
-    console.log('2. Complete any CAPTCHA / 2FA challenges.');
+    console.log('2. Complete any CAPTCHA / 2FA / email code challenges.');
     console.log('3. Once you see the chat interface ready, return here.');
     console.log('======================================================\n');
 
@@ -341,16 +350,8 @@ async function scrapeChatGPT(prompt, options) {
     process.exit(1);
   }
 
-  // Clean up any stale profile directory before headless run so it always starts fresh
-  if (fs.existsSync(USER_DATA_DIR)) {
-    try {
-      fs.rmSync(USER_DATA_DIR, { recursive: true, force: true });
-      console.log('[ChatGPT Scraper] Cleared stale profile cache (.chatgpt_profile)');
-    } catch {}
-  }
-
   console.log(`[ChatGPT Scraper] Launching browser (headless: ${options.headless})...`);
-  const { browser, page } = await launchBrowser(options.headless, false);
+  const { browser, page } = await launchBrowser(options.headless, true);
 
   try {
     // Load session cookies if exported
@@ -395,7 +396,7 @@ async function scrapeChatGPT(prompt, options) {
     const isLoginPromptVisible = await page.$('button[data-testid="login-button"], a[href*="/login"]');
     if (isLoginPromptVisible) {
       console.warn('\n[Warning] It seems you are not logged in. ChatGPT may limit requests or prompt for login.');
-      console.warn('Consider running: node scripts/chatgptScraper.mjs --login\n');
+      console.warn('Please log in manually with: node scripts/chatgptScraper.mjs --login\n');
       await saveDebugScreenshot(page, 'login-wall-detected');
     }
 
@@ -789,12 +790,6 @@ async function scrapeChatGPT(prompt, options) {
     try {
       await browser.close();
     } catch {}
-    // Clean up temporary profile cache if created
-    if (fs.existsSync(USER_DATA_DIR)) {
-      try {
-        fs.rmSync(USER_DATA_DIR, { recursive: true, force: true });
-      } catch {}
-    }
   }
 }
 
