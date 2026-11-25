@@ -26,6 +26,7 @@ interface BookItem {
   shortDescription?: string;
   content: string;
   pendingContent?: string;
+  pendingContentProvider?: string;
   contentStatus?: "DRAFT" | "PENDING_REVIEW" | "APPROVED" | "REJECTED";
   chapters?: Chapter[];
   isTopCombine: boolean;
@@ -180,6 +181,16 @@ export default function AdminBooksPage() {
     setReviewDraftText(b.pendingContent || "");
     setReviewTab(b.pendingContent ? "preview" : "current");
     setReviewModalOpen(true);
+  };
+
+  const currentReviewIndex = reviewBook ? books.findIndex((b) => b._id === reviewBook._id) : -1;
+
+  const handleNavigateReview = (direction: -1 | 1) => {
+    if (currentReviewIndex === -1) return;
+    const nextIndex = currentReviewIndex + direction;
+    if (nextIndex >= 0 && nextIndex < books.length) {
+      handleOpenReviewModal(books[nextIndex]);
+    }
   };
 
   const handleApproveDraft = async (bookId: string, customContent?: string) => {
@@ -959,17 +970,82 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
                   >
                     Status: {reviewBook.contentStatus || "PENDING_REVIEW"}
                   </span>
+                  {reviewBook.pendingContentProvider && (
+                    <span
+                      style={{
+                        padding: "3px 8px",
+                        borderRadius: "12px",
+                        fontSize: "0.75rem",
+                        fontWeight: 700,
+                        backgroundColor:
+                          reviewBook.pendingContentProvider === "deepseek"
+                            ? "rgba(56, 189, 248, 0.2)"
+                            : "rgba(16, 185, 129, 0.2)",
+                        color:
+                          reviewBook.pendingContentProvider === "deepseek"
+                            ? "#38BDF8"
+                            : "#34D399",
+                      }}
+                    >
+                      {reviewBook.pendingContentProvider === "deepseek"
+                        ? "🧠 DeepSeek"
+                        : reviewBook.pendingContentProvider === "chatgpt"
+                        ? "🤖 ChatGPT"
+                        : reviewBook.pendingContentProvider}
+                    </span>
+                  )}
                 </div>
                 <p style={{ color: "#94A3B8", fontSize: "0.85rem", margin: "4px 0 0 0" }}>
                   Book: <strong style={{ color: "#F8FAFC" }}>{reviewBook.title}</strong> ({reviewBook.topic})
                 </p>
               </div>
-              <button
-                onClick={() => setReviewModalOpen(false)}
-                style={{ background: "transparent", border: "none", color: "#94A3B8", fontSize: "1.2rem", cursor: "pointer" }}
-              >
-                ✕
-              </button>
+              <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+                <button
+                  type="button"
+                  onClick={() => handleNavigateReview(-1)}
+                  disabled={currentReviewIndex <= 0 || reviewActionLoading}
+                  title="Previous book"
+                  style={{
+                    padding: "4px 10px",
+                    borderRadius: "6px",
+                    border: "1px solid #334155",
+                    backgroundColor: "#1E293B",
+                    color: currentReviewIndex <= 0 ? "#475569" : "#F8FAFC",
+                    cursor: currentReviewIndex <= 0 || reviewActionLoading ? "not-allowed" : "pointer",
+                    fontSize: "0.95rem",
+                    fontWeight: 600,
+                  }}
+                >
+                  ←
+                </button>
+                <span style={{ color: "#94A3B8", fontSize: "0.8rem", minWidth: "44px", textAlign: "center" }}>
+                  {currentReviewIndex >= 0 ? `${currentReviewIndex + 1} / ${books.length}` : ""}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleNavigateReview(1)}
+                  disabled={currentReviewIndex === -1 || currentReviewIndex >= books.length - 1 || reviewActionLoading}
+                  title="Next book"
+                  style={{
+                    padding: "4px 10px",
+                    borderRadius: "6px",
+                    border: "1px solid #334155",
+                    backgroundColor: "#1E293B",
+                    color: currentReviewIndex === -1 || currentReviewIndex >= books.length - 1 ? "#475569" : "#F8FAFC",
+                    cursor: currentReviewIndex === -1 || currentReviewIndex >= books.length - 1 || reviewActionLoading ? "not-allowed" : "pointer",
+                    fontSize: "0.95rem",
+                    fontWeight: 600,
+                  }}
+                >
+                  →
+                </button>
+                <button
+                  onClick={() => setReviewModalOpen(false)}
+                  style={{ background: "transparent", border: "none", color: "#94A3B8", fontSize: "1.2rem", cursor: "pointer", marginLeft: "4px" }}
+                >
+                  ✕
+                </button>
+              </div>
             </div>
 
             {/* Navigation Tabs */}

@@ -17,6 +17,7 @@ export interface IIndividualBook extends Document {
   shortDescription?: string;
   content: string;
   pendingContent?: string; // Newly generated AI content awaiting admin review
+  pendingContentProvider?: string; // AI provider that generated pendingContent (e.g., "chatgpt" | "deepseek")
   contentStatus?: "DRAFT" | "PENDING_REVIEW" | "APPROVED" | "REJECTED"; // Review status of the content
   chapters?: IChapter[];
   isFeatured?: boolean;
@@ -45,6 +46,7 @@ const IndividualBookSchema = new Schema<IIndividualBook>(
     shortDescription: { type: String, default: "" },
     content: { type: String, default: "" },
     pendingContent: { type: String, default: "" }, // Raw/formatted AI output awaiting approval
+    pendingContentProvider: { type: String, default: "" }, // AI provider that generated pendingContent
     contentStatus: {
       type: String,
       enum: ["DRAFT", "PENDING_REVIEW", "APPROVED", "REJECTED"],

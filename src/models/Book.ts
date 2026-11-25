@@ -15,6 +15,7 @@ export interface IBookSummary extends Document {
   shortDescription?: string;
   content: string; // HTML formatted content
   pendingContent?: string; // Newly generated AI content awaiting admin review
+  pendingContentProvider?: string; // AI provider that generated pendingContent (e.g., "chatgpt" | "deepseek")
   contentStatus?: "DRAFT" | "PENDING_REVIEW" | "APPROVED" | "REJECTED"; // Review status of the content
   chapters?: IChapter[];
   isTopCombine: boolean;
@@ -40,6 +41,7 @@ const BookSummarySchema = new Schema<IBookSummary>(
     shortDescription: { type: String, default: "" },
     content: { type: String, default: "" }, // Rich HTML content
     pendingContent: { type: String, default: "" }, // Raw/formatted AI output awaiting approval
+    pendingContentProvider: { type: String, default: "" }, // AI provider that generated pendingContent
     contentStatus: {
       type: String,
       enum: ["DRAFT", "PENDING_REVIEW", "APPROVED", "REJECTED"],
