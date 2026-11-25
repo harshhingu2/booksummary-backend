@@ -43,6 +43,9 @@ export function parseCronRunsPerDay(schedule: string): { runsPerDay: number; des
   if (s === "*/30 * * * *") {
     return { runsPerDay: 48, description: "Every 30 minutes (48 runs/day)" };
   }
+  if (s === "*/45 * * * *") {
+    return { runsPerDay: 32, description: "Every 45 minutes (32 runs/day)" };
+  }
   if (s === "0 * * * *" || s === "* */1 * * *") {
     return { runsPerDay: 24, description: "Every 1 hour (24 runs/day)" };
   }

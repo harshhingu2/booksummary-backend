@@ -19,6 +19,7 @@ const FREQUENCY_OPTIONS = [
   { label: "Every 5 Minutes", value: "*/5 * * * *" },
   { label: "Every 15 Minutes", value: "*/15 * * * *" },
   { label: "Every 30 Minutes", value: "*/30 * * * *" },
+  { label: "Every 45 Minutes", value: "*/45 * * * *" },
   { label: "Every 1 Hour", value: "0 * * * *" },
   { label: "Every 6 Hours", value: "0 */6 * * *" },
   { label: "Every 12 Hours", value: "0 */12 * * *" },
