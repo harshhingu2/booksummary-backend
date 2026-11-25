@@ -27,6 +27,7 @@ interface BookItem {
   content: string;
   pendingContent?: string;
   pendingContentProvider?: string;
+  pendingContentGeneratedAt?: string;
   contentStatus?: "DRAFT" | "PENDING_REVIEW" | "APPROVED" | "REJECTED";
   chapters?: Chapter[];
   isTopCombine: boolean;
@@ -1006,6 +1007,20 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
                   >
                     📝 {reviewDraftText.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().split(" ").filter(Boolean).length.toLocaleString()} words
                   </span>
+                  {reviewBook.pendingContentGeneratedAt && (
+                    <span
+                      style={{
+                        padding: "3px 8px",
+                        borderRadius: "12px",
+                        fontSize: "0.75rem",
+                        fontWeight: 600,
+                        backgroundColor: "rgba(139, 92, 246, 0.2)",
+                        color: "#C4B5FD",
+                      }}
+                    >
+                      🕒 {new Date(reviewBook.pendingContentGeneratedAt).toLocaleString()}
+                    </span>
+                  )}
                 </div>
                 <p style={{ color: "#94A3B8", fontSize: "0.85rem", margin: "4px 0 0 0" }}>
                   Book: <strong style={{ color: "#F8FAFC" }}>{reviewBook.title}</strong> ({reviewBook.topic})

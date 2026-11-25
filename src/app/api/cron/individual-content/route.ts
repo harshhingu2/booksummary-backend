@@ -138,6 +138,7 @@ export async function GET(request: NextRequest) {
         // Update book with pending content, set contentStatus to PENDING_REVIEW, and clear the cron flag
         await IndividualBook.findByIdAndUpdate(book._id, {
           pendingContent: generatedContent,
+          pendingContentGeneratedAt: new Date(),
           contentStatus: "PENDING_REVIEW",
           needsContentGeneration: false,
         });

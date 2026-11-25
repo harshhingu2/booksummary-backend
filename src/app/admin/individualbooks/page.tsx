@@ -30,6 +30,7 @@ interface IndividualBookItem {
   content: string;
   pendingContent?: string;
   pendingContentProvider?: string;
+  pendingContentGeneratedAt?: string;
   contentStatus?: "DRAFT" | "PENDING_REVIEW" | "APPROVED" | "REJECTED";
   chapters?: Chapter[];
   isFeatured?: boolean;
@@ -46,6 +47,15 @@ export default function AdminIndividualBooksPage() {
   const [search, setSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState("ALL");
   const [contentStatusFilter, setContentStatusFilter] = useState("ALL");
+  const [categoryFilter, setCategoryFilter] = useState("ALL");
+  const [featuredFilter, setFeaturedFilter] = useState("ALL");
+  const [contentPresenceFilter, setContentPresenceFilter] = useState("ALL");
+  const [queueingEmpty, setQueueingEmpty] = useState(false);
+  const [sortBy, setSortBy] = useState("rank_desc");
+  const [page, setPage] = useState(1);
+  const [limit, setLimit] = useState(20);
+  const [totalBooks, setTotalBooks] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
   const [message, setMessage] = useState<{ text: string; type: "success" | "error" } | null>(null);
 
   // AI Queue & Cron Information for estimation calculations
@@ -274,11 +284,21 @@ export default function AdminIndividualBooksPage() {
       if (search) params.append("search", search);
       if (statusFilter && statusFilter !== "ALL") params.append("status", statusFilter);
       if (contentStatusFilter && contentStatusFilter !== "ALL") params.append("contentStatus", contentStatusFilter);
+      if (categoryFilter && categoryFilter !== "ALL") params.append("categoryId", categoryFilter);
+      if (featuredFilter && featuredFilter !== "ALL") params.append("featured", featuredFilter);
+      if (contentPresenceFilter && contentPresenceFilter !== "ALL") params.append("contentPresence", contentPresenceFilter);
+      if (sortBy) params.append("sortBy", sortBy);
+      params.append("page", String(page));
+      params.append("limit", String(limit));
 
       const res = await fetch(`/api/admin/individualbooks?${params.toString()}`, { cache: "no-store" });
       const data = await res.json();
       if (data.success) {
         setBooks(data.books);
+        if (data.pagination) {
+          setTotalBooks(data.pagination.total);
+          setTotalPages(data.pagination.totalPages);
+        }
         if (data.queueInfo) {
           setQueueInfo(data.queueInfo);
         }
@@ -307,8 +327,37 @@ export default function AdminIndividualBooksPage() {
   }, []);
 
   useEffect(() => {
+    setPage(1);
+  }, [search, statusFilter, contentStatusFilter, categoryFilter, featuredFilter, contentPresenceFilter, sortBy, limit]);
+
+  useEffect(() => {
     fetchBooks();
-  }, [search, statusFilter, contentStatusFilter]);
+  }, [search, statusFilter, contentStatusFilter, categoryFilter, featuredFilter, contentPresenceFilter, sortBy, page, limit]);
+
+  const handleQueueAllEmpty = async () => {
+    const confirmed = window.confirm(
+      "Are you sure you want to add ALL books with empty production content into the AI Cron Queue?"
+    );
+    if (!confirmed) return;
+
+    try {
+      setQueueingEmpty(true);
+      const res = await fetch("/api/admin/individualbooks/queue-empty", {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (data.success) {
+        setMessage({ text: data.message, type: "success" });
+        fetchBooks();
+      } else {
+        setMessage({ text: data.error || "Failed to queue empty books", type: "error" });
+      }
+    } catch (err: any) {
+      setMessage({ text: err.message || "Failed to queue empty books", type: "error" });
+    } finally {
+      setQueueingEmpty(false);
+    }
+  };
 
   const handleOpenAddModal = () => {
     setEditingId(null);
@@ -984,6 +1033,124 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
               <option value="deepseek">🐋 DeepSeek (chat.deepseek.com)</option>
             </select>
           </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <label style={{ color: "#94A3B8", fontSize: "0.85rem", fontWeight: 600 }}>Category:</label>
+            <select
+              value={categoryFilter}
+              onChange={(e) => setCategoryFilter(e.target.value)}
+              style={{
+                padding: "8px 12px",
+                backgroundColor: "#1E293B",
+                border: "1px solid #334155",
+                borderRadius: "6px",
+                color: "#F8FAFC",
+                fontSize: "0.85rem",
+                fontWeight: 600,
+                cursor: "pointer",
+                outline: "none",
+              }}
+            >
+              <option value="ALL">All Categories</option>
+              {categories.map((cat) => (
+                <option key={cat._id} value={cat._id}>
+                  {cat.name}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <label style={{ color: "#94A3B8", fontSize: "0.85rem", fontWeight: 600 }}>Featured:</label>
+            <select
+              value={featuredFilter}
+              onChange={(e) => setFeaturedFilter(e.target.value)}
+              style={{
+                padding: "8px 12px",
+                backgroundColor: "#1E293B",
+                border: "1px solid #334155",
+                borderRadius: "6px",
+                color: "#F8FAFC",
+                fontSize: "0.85rem",
+                fontWeight: 600,
+                cursor: "pointer",
+                outline: "none",
+              }}
+            >
+              <option value="ALL">All</option>
+              <option value="FEATURED">⭐ Featured Only</option>
+              <option value="NOT_FEATURED">Not Featured</option>
+            </select>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <label style={{ color: "#94A3B8", fontSize: "0.85rem", fontWeight: 600 }}>Sort By:</label>
+            <select
+              value={sortBy}
+              onChange={(e) => setSortBy(e.target.value)}
+              style={{
+                padding: "8px 12px",
+                backgroundColor: "#1E293B",
+                border: "1px solid #334155",
+                borderRadius: "6px",
+                color: "#F8FAFC",
+                fontSize: "0.85rem",
+                fontWeight: 600,
+                cursor: "pointer",
+                outline: "none",
+              }}
+            >
+              <option value="rank_desc">Rank: High → Low</option>
+              <option value="rank_asc">Rank: Low → High</option>
+              <option value="newest">Newest First</option>
+              <option value="oldest">Oldest First</option>
+              <option value="title_asc">Title: A → Z</option>
+              <option value="title_desc">Title: Z → A</option>
+            </select>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <label style={{ color: "#94A3B8", fontSize: "0.85rem", fontWeight: 600 }}>Production / Queue:</label>
+            <select
+              value={contentPresenceFilter}
+              onChange={(e) => setContentPresenceFilter(e.target.value)}
+              style={{
+                padding: "8px 12px",
+                backgroundColor: "#1E293B",
+                border: "1px solid #334155",
+                borderRadius: "6px",
+                color: "#F8FAFC",
+                fontSize: "0.85rem",
+                fontWeight: 600,
+                cursor: "pointer",
+                outline: "none",
+              }}
+            >
+              <option value="ALL">All</option>
+              <option value="EMPTY_PRODUCTION">Empty Production Content</option>
+              <option value="EMPTY_UNQUEUED">Empty & Not Queued</option>
+              <option value="QUEUED">In AI Cron Queue</option>
+            </select>
+          </div>
+
+          <button
+            type="button"
+            onClick={handleQueueAllEmpty}
+            disabled={queueingEmpty}
+            style={{
+              padding: "8px 14px",
+              backgroundColor: "#F59E0B",
+              color: "#0F172A",
+              border: "none",
+              borderRadius: "6px",
+              fontSize: "0.85rem",
+              fontWeight: 700,
+              cursor: queueingEmpty ? "not-allowed" : "pointer",
+              opacity: queueingEmpty ? 0.6 : 1,
+            }}
+          >
+            {queueingEmpty ? "Queueing..." : "⚡ Queue All Empty"}
+          </button>
         </div>
       </div>
 
@@ -1248,6 +1415,95 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
         )}
       </div>
 
+      {/* Pagination Bar */}
+      <div
+        style={{
+          display: "flex",
+          flexWrap: "wrap",
+          justifyContent: "space-between",
+          alignItems: "center",
+          gap: "12px",
+          marginTop: "16px",
+          padding: "12px 16px",
+          backgroundColor: "#0F172A",
+          border: "1px solid #1E293B",
+          borderRadius: "10px",
+        }}
+      >
+        <div style={{ color: "#94A3B8", fontSize: "0.85rem" }}>
+          {totalBooks > 0
+            ? `Showing ${(page - 1) * limit + 1}–${Math.min(page * limit, totalBooks)} of ${totalBooks} books`
+            : "Showing 0 books"}
+        </div>
+
+        <div style={{ display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <label style={{ color: "#94A3B8", fontSize: "0.85rem", fontWeight: 600 }}>Per page:</label>
+            <select
+              value={limit}
+              onChange={(e) => setLimit(Number(e.target.value))}
+              style={{
+                padding: "6px 10px",
+                backgroundColor: "#1E293B",
+                border: "1px solid #334155",
+                borderRadius: "6px",
+                color: "#F8FAFC",
+                fontSize: "0.85rem",
+                fontWeight: 600,
+                cursor: "pointer",
+                outline: "none",
+              }}
+            >
+              {[10, 20, 50, 100, 200].map((opt) => (
+                <option key={opt} value={opt}>
+                  {opt}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.max(1, p - 1))}
+              disabled={page <= 1 || loading}
+              style={{
+                padding: "6px 12px",
+                borderRadius: "6px",
+                border: "1px solid #334155",
+                backgroundColor: "#1E293B",
+                color: page <= 1 ? "#475569" : "#F8FAFC",
+                cursor: page <= 1 || loading ? "not-allowed" : "pointer",
+                fontSize: "0.85rem",
+                fontWeight: 600,
+              }}
+            >
+              ← Prev
+            </button>
+            <span style={{ color: "#E2E8F0", fontSize: "0.85rem", fontWeight: 600 }}>
+              Page {page} of {totalPages}
+            </span>
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.min(totalPages, p + 1))}
+              disabled={page >= totalPages || loading}
+              style={{
+                padding: "6px 12px",
+                borderRadius: "6px",
+                border: "1px solid #334155",
+                backgroundColor: "#1E293B",
+                color: page >= totalPages ? "#475569" : "#F8FAFC",
+                cursor: page >= totalPages || loading ? "not-allowed" : "pointer",
+                fontSize: "0.85rem",
+                fontWeight: 600,
+              }}
+            >
+              Next →
+            </button>
+          </div>
+        </div>
+      </div>
+
       {/* Review AI Draft Modal */}
       {reviewModalOpen && reviewBook && (
         <div style={styles.modalBackdrop}>
@@ -1316,6 +1572,20 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
                   >
                     📝 {reviewDraftText.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().split(" ").filter(Boolean).length.toLocaleString()} words
                   </span>
+                  {reviewBook.pendingContentGeneratedAt && (
+                    <span
+                      style={{
+                        padding: "3px 8px",
+                        borderRadius: "12px",
+                        fontSize: "0.75rem",
+                        fontWeight: 600,
+                        backgroundColor: "rgba(139, 92, 246, 0.2)",
+                        color: "#C4B5FD",
+                      }}
+                    >
+                      🕒 {new Date(reviewBook.pendingContentGeneratedAt).toLocaleString()}
+                    </span>
+                  )}
                 </div>
                 <p style={{ color: "#94A3B8", fontSize: "1rem", margin: "6px 0 0 0" }}>
                   Book: <strong style={{ color: "#F8FAFC", fontSize: "1.2rem" }}>{reviewBook.title}</strong> {reviewBook.author ? `by ${reviewBook.author}` : ""} ({reviewBook.topic})

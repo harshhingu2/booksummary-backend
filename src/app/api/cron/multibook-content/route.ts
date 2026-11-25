@@ -133,6 +133,7 @@ export async function GET(request: NextRequest) {
         // Update summary with pending content, set contentStatus to PENDING_REVIEW, and clear the cron flag
         await BookSummary.findByIdAndUpdate(summary._id, {
           pendingContent: generatedContent,
+          pendingContentGeneratedAt: new Date(),
           contentStatus: "PENDING_REVIEW",
           needsContentGeneration: false,
         });
