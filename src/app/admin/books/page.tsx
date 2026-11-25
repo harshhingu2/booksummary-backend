@@ -994,6 +994,18 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
                         : reviewBook.pendingContentProvider}
                     </span>
                   )}
+                  <span
+                    style={{
+                      padding: "3px 8px",
+                      borderRadius: "12px",
+                      fontSize: "0.75rem",
+                      fontWeight: 700,
+                      backgroundColor: "rgba(148, 163, 184, 0.2)",
+                      color: "#E2E8F0",
+                    }}
+                  >
+                    📝 {reviewDraftText.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim().split(" ").filter(Boolean).length.toLocaleString()} words
+                  </span>
                 </div>
                 <p style={{ color: "#94A3B8", fontSize: "0.85rem", margin: "4px 0 0 0" }}>
                   Book: <strong style={{ color: "#F8FAFC" }}>{reviewBook.title}</strong> ({reviewBook.topic})
