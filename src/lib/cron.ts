@@ -40,6 +40,8 @@ export async function executeCronJob(jobOrId: ICronJob | string) {
   job.lastRunAt = new Date();
   await job.save();
 
+  const startTime = Date.now();
+
   try {
     let resultSummary = "";
     if (job.endpoint.includes("/api/cron/youtube") || job.name.toLowerCase().includes("youtube")) {
@@ -69,12 +71,14 @@ export async function executeCronJob(jobOrId: ICronJob | string) {
     job.lastStatus = "success";
     job.lastRunResult = resultSummary;
     job.lastRunAt = new Date();
+    job.lastRunDurationMs = Date.now() - startTime;
     await job.save();
     return { success: true, resultSummary };
   } catch (err: any) {
     job.lastStatus = "failed";
     job.lastRunResult = `Execution error: ${err.message}`;
     job.lastRunAt = new Date();
+    job.lastRunDurationMs = Date.now() - startTime;
     await job.save();
     return { success: false, error: err.message };
   }
@@ -84,13 +88,17 @@ export async function executeCronJob(jobOrId: ICronJob | string) {
  * Reloads all active cron jobs from MongoDB and schedules node-cron tasks.
  */
 export async function reloadCronSchedules() {
+  const startTime = Date.now();
+
   try {
     await connectDB();
 
     // Stop & clear existing scheduled tasks
     if (globalForCron.activeCronTasks) {
       for (const [id, task] of globalForCron.activeCronTasks.entries()) {
-        try {
+        const startTime = Date.now();
+
+  try {
           task.stop();
         } catch (e) {
           console.error(`[node-cron] Error stopping task ${id}:`, e);
@@ -112,7 +120,9 @@ export async function reloadCronSchedules() {
       if (cron.validate(scheduleExpr)) {
         const task = cron.schedule(scheduleExpr, async () => {
           console.log(`[node-cron] Triggering scheduled job '${job.name}' (${scheduleExpr})...`);
-          try {
+          const startTime = Date.now();
+
+  try {
             await connectDB();
             const freshJob = await CronJob.findById(jobIdStr);
             if (!freshJob || !freshJob.isActive) {

@@ -8,6 +8,7 @@ export interface ICronJob extends Document {
   endpoint: string; // Target endpoint URL or internal identifier
   isActive: boolean;
   lastRunAt?: Date;
+  lastRunDurationMs?: number;
   lastStatus: CronStatus;
   lastRunResult?: string;
   createdAt: Date;
@@ -21,6 +22,7 @@ const CronJobSchema = new Schema<ICronJob>(
     endpoint: { type: String, required: true, trim: true },
     isActive: { type: Boolean, default: true, index: true },
     lastRunAt: { type: Date },
+    lastRunDurationMs: { type: Number },
     lastStatus: {
       type: String,
       enum: ["success", "failed", "running", "never"],

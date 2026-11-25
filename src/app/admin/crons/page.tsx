@@ -12,6 +12,7 @@ interface CronItem {
   isActive: boolean;
   lastRunAt?: string;
   lastStatus: "success" | "failed" | "running" | "never";
+  lastRunDurationMs?: number;
   lastRunResult?: string;
 }
 
@@ -394,7 +395,17 @@ export default function AdminCronsPage() {
                     </span>
                   </td>
                   <td style={styles.td}>
-                    {job.lastRunAt ? new Date(job.lastRunAt).toLocaleTimeString() : "Never"}
+                    <div>{job.lastRunAt ? new Date(job.lastRunAt).toLocaleTimeString() : "Never"}</div>
+                    {typeof job.lastRunDurationMs === "number" && (
+                      <div style={{ fontSize: "0.75rem", color: "#94A3B8", marginTop: "2px" }}>
+                        ⏱️{" "}
+                        {job.lastRunDurationMs < 1000
+                          ? `${job.lastRunDurationMs}ms`
+                          : job.lastRunDurationMs < 60000
+                          ? `${(job.lastRunDurationMs / 1000).toFixed(1)}s`
+                          : `${Math.floor(job.lastRunDurationMs / 60000)}m ${Math.round((job.lastRunDurationMs % 60000) / 1000)}s`}
+                      </div>
+                    )}
                   </td>
                   <td style={styles.td}>
                     <span
