@@ -209,7 +209,9 @@ export default function AdminBooksPage() {
       const data = await res.json();
       if (data.success) {
         setMessage({ text: "Content approved and published to live summary!", type: "success" });
-        setReviewModalOpen(false);
+        setReviewBook((prev) =>
+          prev ? { ...prev, content: targetContent, contentStatus: "APPROVED" } : null
+        );
         fetchBooks();
       } else {
         setMessage({ text: data.error || "Failed to approve content", type: "error" });
