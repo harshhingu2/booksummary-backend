@@ -12,7 +12,26 @@ import util from "util";
 
 const execFilePromise = util.promisify(execFile);
 
+const LOCK_KEY = "__individualCronLock";
+const STALE_LOCK_MS = 45 * 60 * 1000; // 45 minutes safety timeout
+
+function acquireLock(): boolean {
+  const g = globalThis as Record<string, any>;
+  const lock = g[LOCK_KEY] as { running: boolean; startedAt: number } | undefined;
+  if (lock?.running && Date.now() - lock.startedAt < STALE_LOCK_MS) {
+    return false;
+  }
+  g[LOCK_KEY] = { running: true, startedAt: Date.now() };
+  return true;
+}
+
+function releaseLock() {
+  const g = globalThis as Record<string, any>;
+  g[LOCK_KEY] = { running: false, startedAt: 0 };
+}
+
 export async function GET(request: NextRequest) {
+  let lockAcquired = false;
   try {
     const authHeader = request.headers.get("authorization");
     const cronSecret = process.env.CRON_SECRET || "dumbscroll_cron_secret_2026_v1";
@@ -23,6 +42,15 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ success: false, error: "Unauthorized cron execution" }, { status: 401 });
       }
     }
+
+    if (!acquireLock()) {
+      console.log("[Cron Individual AI] Already running. Skipping overlapping trigger.");
+      return NextResponse.json(
+        { success: false, message: "Individual content cron is already running. Skipping overlapping trigger." },
+        { status: 409 }
+      );
+    }
+    lockAcquired = true;
 
     await connectDB();
 
@@ -169,6 +197,10 @@ export async function GET(request: NextRequest) {
     });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  } finally {
+    if (lockAcquired) {
+      releaseLock();
+    }
   }
 }
 
