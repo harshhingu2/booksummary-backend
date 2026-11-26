@@ -20,7 +20,7 @@ export async function GET(
     let book = null;
 
     if (ObjectId.isValid(id)) {
-      book = await collection.findOne({ _id: new ObjectId(id) });
+      book = await collection.findOne({ _id: new ObjectId(id), status: "ACTIVE" });
     }
 
     if (!book) {

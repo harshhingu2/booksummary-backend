@@ -17,7 +17,7 @@ export async function GET(
     }
 
     const collection = db.collection("topcombinebooksummary");
-    const summary = await collection.findOne({ _id: new ObjectId(id) });
+    const summary = await collection.findOne({ _id: new ObjectId(id), status: "ACTIVE" });
 
     if (!summary) {
       return NextResponse.json(

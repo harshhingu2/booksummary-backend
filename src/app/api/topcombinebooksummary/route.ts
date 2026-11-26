@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
         query.status = status;
       }
     } else {
-      query.status = { $ne: "INACTIVE" }; // Defaults to not inactive
+      query.status = "ACTIVE";
     }
 
     if (categoryId) {
