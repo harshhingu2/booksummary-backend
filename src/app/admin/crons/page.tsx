@@ -59,6 +59,30 @@ export default function AdminCronsPage() {
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; name: string } | null>(null);
   const [isDeleting, setIsDeleting] = useState(false);
 
+  // Kill Confirmation State
+  const [killTarget, setKillTarget] = useState<{ id: string; name: string } | null>(null);
+  const [isKilling, setIsKilling] = useState(false);
+
+  const handleConfirmKill = async () => {
+    if (!killTarget) return;
+    try {
+      setIsKilling(true);
+      const res = await fetch("/api/admin/crons/kill", { method: "POST" });
+      const data = await res.json();
+      if (data.success) {
+        setMessage({ text: data.message, type: "success" });
+        setRunningId(null);
+      } else {
+        setMessage({ text: data.error || "Failed to kill scraper", type: "error" });
+      }
+    } catch (err: any) {
+      setMessage({ text: err.message || "Network error", type: "error" });
+    } finally {
+      setIsKilling(false);
+      setKillTarget(null);
+    }
+  };
+
   const [frequencyChoice, setFrequencyChoice] = useState("*/15 * * * *");
   const [customCron, setCustomCron] = useState("*/15 * * * *");
   const [formData, setFormData] = useState({
@@ -428,6 +452,23 @@ export default function AdminCronsPage() {
                     >
                       {runningId === job._id ? "Running..." : "▶️ Run Now"}
                     </button>
+                    {job.endpoint.includes("individual-content") && (
+                      <button
+                        onClick={() => setKillTarget({ id: job._id, name: job.name })}
+                        style={{
+                          ...styles.deleteButton,
+                          backgroundColor: "rgba(239, 68, 68, 0.15)",
+                          color: "#F87171",
+                          border: "1px solid rgba(239, 68, 68, 0.35)",
+                          padding: "6px 10px",
+                          fontSize: "0.8rem",
+                          fontWeight: 600,
+                        }}
+                        title="Kill active scraper process"
+                      >
+                        🛑 Kill
+                      </button>
+                    )}
                     {job.lastRunResult && (
                       <button
                         onClick={() => setSelectedResult(job.lastRunResult || null)}
@@ -586,6 +627,48 @@ export default function AdminCronsPage() {
         onConfirm={handleConfirmDelete}
         onCancel={() => setDeleteTarget(null)}
       />
+
+      {/* Custom Kill Confirmation Modal */}
+      {killTarget && (
+        <div style={styles.modalOverlay}>
+          <div style={{ ...styles.modal, maxWidth: "440px" }}>
+            <h2 style={{ margin: "0 0 12px 0", color: "#F87171", fontSize: "1.25rem" }}>
+              🛑 Kill Running Scraper?
+            </h2>
+            <p style={{ margin: "0 0 20px 0", color: "#CBD5E1", fontSize: "0.95rem", lineHeight: 1.5 }}>
+              Are you sure you want to force-kill the active scraper process for{" "}
+              <strong style={{ color: "#F8FAFC" }}>{killTarget.name}</strong>? Any book currently
+              being scraped will stop immediately and the cron lock will be released.
+            </p>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+              <button
+                onClick={() => setKillTarget(null)}
+                disabled={isKilling}
+                style={styles.cancelButton}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleConfirmKill}
+                disabled={isKilling}
+                style={{
+                  backgroundColor: "#DC2626",
+                  color: "#FFFFFF",
+                  border: "none",
+                  borderRadius: "8px",
+                  padding: "10px 18px",
+                  fontWeight: 600,
+                  fontSize: "0.9rem",
+                  cursor: isKilling ? "not-allowed" : "pointer",
+                  opacity: isKilling ? 0.7 : 1,
+                }}
+              >
+                {isKilling ? "Killing..." : "Yes, Kill Process"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
