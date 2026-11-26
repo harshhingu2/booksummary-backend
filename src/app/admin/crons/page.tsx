@@ -295,8 +295,8 @@ export default function AdminCronsPage() {
           <div style={{ fontSize: "0.82rem", color: "#CBD5E1", marginBottom: "6px" }}>
             🔗 <strong>External / Vercel Cron Trigger Endpoint</strong> (for cron-job.org, VPS crontab, or Vercel cron):
           </div>
-          <div style={{ display: "flex", gap: "8px", alignItems: "center" }}>
-            <code style={styles.webhookUrl}>
+          <div style={{ display: "flex", gap: "8px", alignItems: "center", flexWrap: "wrap" }}>
+            <code style={{ ...styles.webhookUrl, wordBreak: "break-all", minWidth: 0, flex: "1 1 240px" }}>
               {typeof window !== "undefined" ? window.location.origin : ""}/api/cron/youtube?secret=
               {cronSecret || "dumbscroll_cron_secret_2026_v1"}
             </code>
@@ -395,7 +395,7 @@ export default function AdminCronsPage() {
                     </span>
                   </td>
                   <td style={styles.td}>
-                    <div>{job.lastRunAt ? new Date(job.lastRunAt).toLocaleTimeString() : "Never"}</div>
+                    <div>{job.lastRunAt ? new Date(job.lastRunAt).toLocaleTimeString(undefined, { hour12: true }) : "Never"}</div>
                     {typeof job.lastRunDurationMs === "number" && (
                       <div style={{ fontSize: "0.75rem", color: "#94A3B8", marginTop: "2px" }}>
                         ⏱️{" "}
@@ -649,7 +649,8 @@ const styles: { [key: string]: React.CSSProperties } = {
     backgroundColor: "#1E293B",
     borderRadius: "14px",
     border: "1px solid #334155",
-    overflow: "hidden",
+    overflowX: "auto",
+    WebkitOverflowScrolling: "touch",
   },
   table: {
     width: "100%",
@@ -713,6 +714,7 @@ const styles: { [key: string]: React.CSSProperties } = {
     display: "flex",
     gap: "6px",
     alignItems: "center",
+    whiteSpace: "nowrap",
   },
   runButton: {
     backgroundColor: "#10B981",

@@ -181,7 +181,7 @@ export default function AdminCachePage() {
                   <tr key={item.key} style={styles.tr}>
                     <td style={styles.tdKey}>{item.key}</td>
                     <td style={styles.td}>
-                      {item.cachedAt ? new Date(item.cachedAt).toLocaleTimeString() : "N/A"}
+                      {item.cachedAt ? new Date(item.cachedAt).toLocaleTimeString(undefined, { hour12: true }) : "N/A"}
                     </td>
                     <td style={styles.td}>
                       <span style={styles.ttlBadge}>{item.ttlRemainingSeconds}s</span>

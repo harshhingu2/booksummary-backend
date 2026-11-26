@@ -10,6 +10,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
   const pathname = usePathname();
   const router = useRouter();
   const [isMobileOpen, setIsMobileOpen] = useState(false);
+  const [isDesktopCollapsed, setIsDesktopCollapsed] = useState(false);
 
   // Auto-close sidebar on window resize to desktop or on pathname change
   useEffect(() => {
@@ -48,16 +49,16 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
   const navItems = [
     { label: "Dashboard", path: "/admin", icon: "📊" },
     { label: "Cron Control", path: "/admin/crons", icon: "⏰" },
+    { label: "Individual Books", path: "/admin/individualbooks", icon: "📖" },
+    { label: "Settings", path: "/admin/settings", icon: "⚙️" },
     { label: "Scraper Screenshots", path: "/admin/scraper-screenshots", icon: "📸" },
+    { label: "Book Summaries", path: "/admin/books", icon: "📚" },
+    { label: "AI Prompts", path: "/admin/prompts", icon: "✨" },
     { label: "Categories", path: "/admin/categories", icon: "🏷️" },
+    { label: "Cache Revalidation", path: "/admin/cache", icon: "⚡" },
     { label: "YouTube Channels", path: "/admin/youtube", icon: "📺" },
     { label: "Shorts Moderation", path: "/admin/youtube/shorts", icon: "🎬" },
     { label: "Users", path: "/admin/users", icon: "👥" },
-    { label: "Cache Revalidation", path: "/admin/cache", icon: "⚡" },
-    { label: "Book Summaries", path: "/admin/books", icon: "📚" },
-    { label: "Individual Books", path: "/admin/individualbooks", icon: "📖" },
-    { label: "AI Prompts", path: "/admin/prompts", icon: "✨" },
-    { label: "Settings", path: "/admin/settings", icon: "⚙️" },
   ];
 
   return (
@@ -69,7 +70,8 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
           <span style={{ fontWeight: 700, fontSize: "1.1rem" }}>DumbScroll Admin</span>
         </div>
         <button
-          onClick={() => setIsMobileOpen(!isMobileOpen)}
+          type="button"
+          onClick={() => setIsMobileOpen((prev) => !prev)}
           aria-label="Toggle Navigation Menu"
           style={styles.mobileMenuButton}
         >
@@ -84,7 +86,10 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
       />
 
       {/* Sidebar */}
-      <aside className={`admin-sidebar ${isMobileOpen ? "open" : ""}`} style={styles.sidebar}>
+      <aside
+        className={`admin-sidebar ${isMobileOpen ? "open" : ""} ${isDesktopCollapsed ? "desktop-collapsed" : ""}`}
+        style={styles.sidebar}
+      >
         <div style={{ display: "flex", flexDirection: "column", flex: 1, minHeight: 0 }}>
           <div style={styles.logoBox}>
             <div style={{ display: "flex", alignItems: "center", gap: "12px", flex: 1 }}>
@@ -94,11 +99,16 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
                 <span style={styles.logoBadge}>{role} PORTAL</span>
               </div>
             </div>
-            {/* Close button for mobile inside sidebar */}
+            {/* Close button inside sidebar (mobile & desktop) */}
             <button
-              onClick={() => setIsMobileOpen(false)}
+              type="button"
+              onClick={() => {
+                setIsMobileOpen(false);
+                setIsDesktopCollapsed(true);
+              }}
               style={styles.sidebarCloseButton}
               aria-label="Close sidebar"
+              title="Collapse sidebar"
             >
               ✖
             </button>
@@ -142,7 +152,25 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
       </aside>
 
       {/* Main Content Area */}
-      <main className="admin-main-content" style={styles.mainContent}>{children}</main>
+      <main className="admin-main-content" style={styles.mainContent}>
+        {isDesktopCollapsed && (
+          <button
+            type="button"
+            className="admin-desktop-open-btn"
+            onClick={() => setIsDesktopCollapsed(false)}
+            aria-label="Open sidebar"
+            title="Open sidebar"
+            style={{
+              ...styles.mobileMenuButton,
+              marginBottom: "16px",
+              backgroundColor: "#1E293B",
+            }}
+          >
+            ☰ Menu
+          </button>
+        )}
+        {children}
+      </main>
     </div>
   );
 }

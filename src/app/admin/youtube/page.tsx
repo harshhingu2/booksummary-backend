@@ -355,7 +355,7 @@ export default function AdminYouTubeChannelsPage() {
                     </span>
                   </td>
                   <td style={styles.td}>
-                    {ch.lastFetchedAt ? new Date(ch.lastFetchedAt).toLocaleTimeString() : "Never"}
+                    {ch.lastFetchedAt ? new Date(ch.lastFetchedAt).toLocaleTimeString(undefined, { hour12: true }) : "Never"}
                   </td>
                   <td style={styles.td}>
                     <div style={{ display: "flex", gap: "8px" }}>

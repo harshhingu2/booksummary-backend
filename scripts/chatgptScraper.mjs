@@ -517,7 +517,48 @@ async function scrapeChatGPT(prompt, options) {
 
     if (!clicked) {
       console.log('[ChatGPT Scraper] Send button not enabled, falling back to Enter key...');
+      await page.evaluate(() => {
+        const el = document.querySelector('div#prompt-textarea.ProseMirror') ||
+                   document.querySelector('div#prompt-textarea') ||
+                   document.querySelector('div.ProseMirror') ||
+                   document.querySelector('#prompt-textarea') ||
+                   document.querySelector('div[contenteditable="true"]') ||
+                   document.querySelector('textarea:not([style*="display: none"]):not([hidden])');
+        if (el) el.focus();
+      });
       await page.keyboard.press('Enter');
+    } else {
+      // Worst-case verification: if clicking the send button didn't actually clear the input, press Enter
+      await new Promise(r => setTimeout(r, 1200));
+      const stillHasText = await page.evaluate(() => {
+        const isGeneratingNow = !!document.querySelector(
+          'button[data-testid="stop-button"], button[aria-label*="Stop"], button[aria-label*="stop"]'
+        );
+        if (isGeneratingNow) return false;
+        const el = document.querySelector('div#prompt-textarea.ProseMirror') ||
+                   document.querySelector('div#prompt-textarea') ||
+                   document.querySelector('div.ProseMirror') ||
+                   document.querySelector('#prompt-textarea') ||
+                   document.querySelector('div[contenteditable="true"]') ||
+                   document.querySelector('textarea:not([style*="display: none"]):not([hidden])');
+        if (!el) return false;
+        const text = (el.value !== undefined ? el.value : el.innerText) || '';
+        return text.trim().length > 0;
+      });
+
+      if (stillHasText) {
+        console.log('[ChatGPT Scraper] Prompt still in editor after send click, pressing Enter as fallback...');
+        await page.evaluate(() => {
+          const el = document.querySelector('div#prompt-textarea.ProseMirror') ||
+                     document.querySelector('div#prompt-textarea') ||
+                     document.querySelector('div.ProseMirror') ||
+                     document.querySelector('#prompt-textarea') ||
+                     document.querySelector('div[contenteditable="true"]') ||
+                     document.querySelector('textarea:not([style*="display: none"]):not([hidden])');
+          if (el) el.focus();
+        });
+        await page.keyboard.press('Enter');
+      }
     }
 
     await saveDebugScreenshot(page, 'prompt-sent');

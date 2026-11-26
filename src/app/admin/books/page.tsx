@@ -1020,7 +1020,7 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
                         color: "#C4B5FD",
                       }}
                     >
-                      🕒 {new Date(reviewBook.pendingContentGeneratedAt).toLocaleString()}
+                      🕒 {new Date(reviewBook.pendingContentGeneratedAt).toLocaleString(undefined, { hour12: true })}
                     </span>
                   )}
                 </div>

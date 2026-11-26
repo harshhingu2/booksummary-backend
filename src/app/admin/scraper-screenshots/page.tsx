@@ -123,7 +123,7 @@ export default function ScraperScreenshotsPage() {
               </div>
               {item.exists && item.updatedAt ? (
                 <div style={{ textAlign: "right", fontSize: "0.78rem", color: "#94A3B8" }}>
-                  <div>🕒 {new Date(item.updatedAt).toLocaleString()}</div>
+                  <div>🕒 {new Date(item.updatedAt).toLocaleString(undefined, { hour12: true })}</div>
                   <div>{(item.sizeBytes / 1024).toFixed(1)} KB</div>
                 </div>
               ) : (
