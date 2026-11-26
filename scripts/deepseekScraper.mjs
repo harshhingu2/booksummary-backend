@@ -13,6 +13,20 @@ const __dirname = path.dirname(__filename);
 const USER_DATA_DIR = path.resolve(__dirname, '../.deepseek_profile');
 const PUBLIC_DIR = path.resolve(__dirname, '../public');
 const DEBUG_SCREENSHOT_PATH = path.join(PUBLIC_DIR, 'debug_deepseek.png');
+const ROLLING_SCREENSHOT_DIR = path.join(PUBLIC_DIR, 'debug_screenshots');
+
+async function saveRollingScreenshot(page, slot) {
+  try {
+    if (!fs.existsSync(ROLLING_SCREENSHOT_DIR)) {
+      fs.mkdirSync(ROLLING_SCREENSHOT_DIR, { recursive: true });
+    }
+    const filePath = path.join(ROLLING_SCREENSHOT_DIR, `deepseek_${slot}.png`);
+    await page.screenshot({ path: filePath, fullPage: false });
+    console.log(`[DeepSeek Scraper Screenshot] Saved #${slot} -> public/debug_screenshots/deepseek_${slot}.png`);
+  } catch (err) {
+    console.warn(`[DeepSeek Scraper Rolling Screenshot Failed] #${slot}: ${err.message}`);
+  }
+}
 
 async function saveDebugScreenshot(page, stepName) {
   try {
@@ -217,6 +231,7 @@ async function handleLoginMode() {
   } catch (err) {
     console.error('[DeepSeek Scraper] Error during login session:', err.message);
   } finally {
+    clearInterval(rollingInterval);
     await browser.close();
   }
 }
@@ -232,6 +247,13 @@ async function scrapeDeepSeek(prompt, options = {}) {
 
   console.log(`[DeepSeek Scraper] Launching browser (headless: ${isHeadless})...`);
   const { browser, page } = await launchBrowser(isHeadless);
+
+  let rollingSlot = 1;
+  const rollingInterval = setInterval(() => {
+    const slot = rollingSlot;
+    rollingSlot = (rollingSlot % 4) + 1;
+    saveRollingScreenshot(page, slot);
+  }, 60000);
 
   try {
     // Load session cookies if exported
@@ -544,6 +566,7 @@ async function scrapeDeepSeek(prompt, options = {}) {
     } catch {}
     throw err;
   } finally {
+    clearInterval(rollingInterval);
     await browser.close();
   }
 }

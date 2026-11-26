@@ -13,6 +13,20 @@ const __dirname = path.dirname(__filename);
 const USER_DATA_DIR = path.resolve(__dirname, '../.chatgpt_profile');
 const PUBLIC_DIR = path.resolve(__dirname, '../public');
 const DEBUG_SCREENSHOT_PATH = path.join(PUBLIC_DIR, 'debug_chatgpt.png');
+const ROLLING_SCREENSHOT_DIR = path.join(PUBLIC_DIR, 'debug_screenshots');
+
+async function saveRollingScreenshot(page, slot) {
+  try {
+    if (!fs.existsSync(ROLLING_SCREENSHOT_DIR)) {
+      fs.mkdirSync(ROLLING_SCREENSHOT_DIR, { recursive: true });
+    }
+    const filePath = path.join(ROLLING_SCREENSHOT_DIR, `chatgpt_${slot}.png`);
+    await page.screenshot({ path: filePath, fullPage: false });
+    console.log(`[ChatGPT Scraper Screenshot] Saved #${slot} -> public/debug_screenshots/chatgpt_${slot}.png`);
+  } catch (err) {
+    console.warn(`[ChatGPT Scraper Rolling Screenshot Failed] #${slot}: ${err.message}`);
+  }
+}
 
 // Load environment variables if available
 const envLocalPath = path.resolve(__dirname, '../.env.local');
@@ -171,7 +185,7 @@ async function launchBrowser(headless = false, useProfile = false) {
   const launchOptions = {
     headless: headless ? true : false,
     defaultViewport: { width: 1920, height: 1080 },
-    protocolTimeout: 180000,
+    protocolTimeout: 300000,
     args: [
       '--no-sandbox',
       '--disable-setuid-sandbox',
@@ -352,6 +366,13 @@ async function scrapeChatGPT(prompt, options) {
 
   console.log(`[ChatGPT Scraper] Launching browser (headless: ${options.headless})...`);
   const { browser, page } = await launchBrowser(options.headless, true);
+
+  let rollingSlot = 1;
+  const rollingInterval = setInterval(() => {
+    const slot = rollingSlot;
+    rollingSlot = (rollingSlot % 4) + 1;
+    saveRollingScreenshot(page, slot);
+  }, 60000);
 
   try {
     // Load session cookies if exported
@@ -828,6 +849,7 @@ async function scrapeChatGPT(prompt, options) {
     } catch {}
     throw err;
   } finally {
+    clearInterval(rollingInterval);
     try {
       await browser.close();
     } catch {}
