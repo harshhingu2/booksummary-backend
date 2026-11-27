@@ -6,64 +6,15 @@ import { connectDB } from "@/lib/db";
 import { IndividualBook } from "@/models/IndividualBook";
 import { Prompt } from "@/models/Prompt";
 import { AdminSetting } from "@/models/AdminSetting";
-import { execFile, ChildProcess } from "child_process";
 import path from "path";
+import {
+  acquireCronLock,
+  isCronAborted,
+  releaseCronLock,
+  runLockedScraper,
+} from "@/lib/cronLock";
 
 const LOCK_KEY = "__individualCronLock";
-const STALE_LOCK_MS = 45 * 60 * 1000; // 45 minutes safety timeout
-
-interface CronLockState {
-  running: boolean;
-  startedAt: number;
-  aborted: boolean;
-  childProcess: ChildProcess | null;
-}
-
-function acquireLock(): boolean {
-  const g = globalThis as Record<string, any>;
-  const lock = g[LOCK_KEY] as CronLockState | undefined;
-  if (lock?.running && Date.now() - lock.startedAt < STALE_LOCK_MS) {
-    return false;
-  }
-  g[LOCK_KEY] = { running: true, startedAt: Date.now(), aborted: false, childProcess: null };
-  return true;
-}
-
-function isAborted(): boolean {
-  const g = globalThis as Record<string, any>;
-  return Boolean((g[LOCK_KEY] as CronLockState | undefined)?.aborted);
-}
-
-function setActiveChild(child: ChildProcess | null) {
-  const g = globalThis as Record<string, any>;
-  if (g[LOCK_KEY]) {
-    (g[LOCK_KEY] as CronLockState).childProcess = child;
-  }
-}
-
-function releaseLock() {
-  const g = globalThis as Record<string, any>;
-  g[LOCK_KEY] = { running: false, startedAt: 0, aborted: false, childProcess: null };
-}
-
-function runScraperProcess(scriptPath: string, prompt: string): Promise<{ stdout: string }> {
-  return new Promise((resolve, reject) => {
-    const child = execFile(
-      process.execPath,
-      [scriptPath, "--headless", "--timeout", "420", prompt],
-      { timeout: 450000, maxBuffer: 10 * 1024 * 1024 },
-      (error, stdout) => {
-        setActiveChild(null);
-        if (error) {
-          reject(error);
-          return;
-        }
-        resolve({ stdout });
-      }
-    );
-    setActiveChild(child);
-  });
-}
 
 export async function GET(request: NextRequest) {
   let lockAcquired = false;
@@ -78,7 +29,7 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    if (!acquireLock()) {
+    if (!acquireCronLock(LOCK_KEY)) {
       console.log("[Cron Individual AI] Already running. Skipping overlapping trigger.");
       return NextResponse.json(
         { success: false, message: "Individual content cron is already running. Skipping overlapping trigger." },
@@ -140,7 +91,7 @@ export async function GET(request: NextRequest) {
     const scriptPath = path.join(process.cwd(), "scripts", scriptName);
 
     for (const book of pendingBooks) {
-      if (isAborted()) {
+      if (isCronAborted(LOCK_KEY)) {
         console.log("[Cron Individual AI] Aborted by admin kill request.");
         break;
       }
@@ -179,7 +130,7 @@ export async function GET(request: NextRequest) {
 
         console.log(`[Cron Individual AI] Generating content for "${book.title}" via ${scraperEngine}...`);
 
-        const { stdout } = await runScraperProcess(scriptPath, populatedPrompt);
+        const { stdout } = await runLockedScraper(LOCK_KEY, scriptPath, populatedPrompt);
 
         const startMarker = scraperEngine === "chatgpt" ? "--- ChatGPT Response ---\n\n" : "--- DeepSeek Response ---\n\n";
         const endMarker = "\n\n-------------------------";
@@ -234,7 +185,7 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
   } finally {
     if (lockAcquired) {
-      releaseLock();
+      releaseCronLock(LOCK_KEY);
     }
   }
 }

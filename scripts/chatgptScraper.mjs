@@ -5,6 +5,13 @@ import path from 'path';
 import fs from 'fs';
 import readline from 'readline';
 import { fileURLToPath } from 'url';
+import {
+  LOW_RAM_CHROME_ARGS,
+  pruneProfileCache,
+  closeBrowserSafely,
+  registerShutdownHooks,
+  setupLowRamPage,
+} from './scraperUtils.mjs';
 
 puppeteer.use(StealthPlugin());
 
@@ -184,16 +191,11 @@ async function launchBrowser(headless = false, useProfile = false) {
 
   const launchOptions = {
     headless: headless ? true : false,
-    defaultViewport: { width: 1920, height: 1080 },
+    defaultViewport: { width: 1280, height: 720 },
     protocolTimeout: 300000,
     args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-gpu',
-      '--disable-infobars',
-      '--window-size=1920,1080',
-      '--disable-blink-features=AutomationControlled'
+      ...LOW_RAM_CHROME_ARGS,
+      '--window-size=1280,720',
     ]
   };
 
@@ -203,6 +205,7 @@ async function launchBrowser(headless = false, useProfile = false) {
     if (!fs.existsSync(USER_DATA_DIR)) {
       fs.mkdirSync(USER_DATA_DIR, { recursive: true });
     }
+    pruneProfileCache(USER_DATA_DIR);
     launchOptions.userDataDir = USER_DATA_DIR;
   }
 
@@ -211,13 +214,17 @@ async function launchBrowser(headless = false, useProfile = false) {
   }
 
   const browser = await puppeteer.launch(launchOptions);
+  registerShutdownHooks(() => browser, useProfile ? USER_DATA_DIR : null);
   const page = (await browser.pages())[0] || (await browser.newPage());
-  await page.setViewport({ width: 1920, height: 1080 });
+  await page.setViewport({ width: 1280, height: 720 });
 
   const ua = isLinux
     ? 'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36'
     : 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36';
   await page.setUserAgent(ua);
+  if (headless) {
+    await setupLowRamPage(page);
+  }
 
   // Attach diagnostic error listeners
   page.on('pageerror', err => {
@@ -354,7 +361,7 @@ async function handleLoginMode() {
   } catch (err) {
     console.error('[ChatGPT Scraper] Error during login session:', err.message);
   } finally {
-    await browser.close();
+    await closeBrowserSafely(browser, USER_DATA_DIR);
   }
 }
 
@@ -850,9 +857,7 @@ async function scrapeChatGPT(prompt, options) {
     throw err;
   } finally {
     clearInterval(rollingInterval);
-    try {
-      await browser.close();
-    } catch {}
+    await closeBrowserSafely(browser, USER_DATA_DIR);
   }
 }
 

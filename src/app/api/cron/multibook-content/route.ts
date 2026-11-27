@@ -6,13 +6,18 @@ import { connectDB } from "@/lib/db";
 import { BookSummary } from "@/models/Book";
 import { Prompt } from "@/models/Prompt";
 import { AdminSetting } from "@/models/AdminSetting";
-import { execFile } from "child_process";
 import path from "path";
-import util from "util";
+import {
+  acquireCronLock,
+  isCronAborted,
+  releaseCronLock,
+  runLockedScraper,
+} from "@/lib/cronLock";
 
-const execFilePromise = util.promisify(execFile);
+const LOCK_KEY = "__multibookCronLock";
 
 export async function GET(request: NextRequest) {
+  let lockAcquired = false;
   try {
     const authHeader = request.headers.get("authorization");
     const cronSecret = process.env.CRON_SECRET || "dumbscroll_cron_secret_2026_v1";
@@ -23,6 +28,15 @@ export async function GET(request: NextRequest) {
         return NextResponse.json({ success: false, error: "Unauthorized cron execution" }, { status: 401 });
       }
     }
+
+    if (!acquireCronLock(LOCK_KEY)) {
+      console.log("[Cron MultiBook AI] Already running. Skipping overlapping trigger.");
+      return NextResponse.json(
+        { success: false, message: "Multi-book content cron is already running. Skipping overlapping trigger." },
+        { status: 409 }
+      );
+    }
+    lockAcquired = true;
 
     await connectDB();
 
@@ -77,6 +91,10 @@ export async function GET(request: NextRequest) {
     const scriptPath = path.join(process.cwd(), "scripts", scriptName);
 
     for (const summary of pendingSummaries) {
+      if (isCronAborted(LOCK_KEY)) {
+        console.log("[Cron MultiBook AI] Aborted by admin kill request.");
+        break;
+      }
       try {
         const topicVal = summary.topic || "General";
         const booksVal = summary.title || "";
@@ -107,11 +125,7 @@ export async function GET(request: NextRequest) {
 
         console.log(`[Cron MultiBook AI] Generating content for "${summary.title}" via ${scraperEngine}...`);
 
-        const { stdout } = await execFilePromise(
-          process.execPath,
-          [scriptPath, "--headless", "--timeout", "420", populatedPrompt],
-          { timeout: 450000, maxBuffer: 10 * 1024 * 1024 }
-        );
+        const { stdout } = await runLockedScraper(LOCK_KEY, scriptPath, populatedPrompt);
 
         const startMarker = scraperEngine === "chatgpt" ? "--- ChatGPT Response ---\n\n" : "--- DeepSeek Response ---\n\n";
         const endMarker = "\n\n-------------------------";
@@ -164,6 +178,10 @@ export async function GET(request: NextRequest) {
     });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  } finally {
+    if (lockAcquired) {
+      releaseCronLock(LOCK_KEY);
+    }
   }
 }
 

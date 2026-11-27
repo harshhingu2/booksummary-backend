@@ -3,9 +3,7 @@ export const dynamic = "force-dynamic";
 import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
-import type { ChildProcess } from "child_process";
-
-const LOCK_KEY = "__individualCronLock";
+import { killCronLock } from "@/lib/cronLock";
 
 export async function POST() {
   const session = await getServerSession(authOptions);
@@ -14,12 +12,10 @@ export async function POST() {
     return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
   }
 
-  const g = globalThis as Record<string, any>;
-  const lock = g[LOCK_KEY] as
-    | { running: boolean; startedAt: number; aborted: boolean; childProcess: ChildProcess | null }
-    | undefined;
+  const ind = killCronLock("__individualCronLock");
+  const multi = killCronLock("__multibookCronLock");
 
-  if (!lock?.running) {
+  if (!ind.killed && !multi.killed) {
     return NextResponse.json({
       success: true,
       killed: false,
@@ -27,20 +23,12 @@ export async function POST() {
     });
   }
 
-  lock.aborted = true;
-  let killedPid: number | undefined;
-  if (lock.childProcess && !lock.childProcess.killed) {
-    killedPid = lock.childProcess.pid;
-    lock.childProcess.kill("SIGKILL");
-  }
-  lock.running = false;
-  lock.childProcess = null;
-
+  const pids = [ind.pid, multi.pid].filter(Boolean);
   return NextResponse.json({
     success: true,
     killed: true,
-    message: killedPid
-      ? `Killed active scraper process (PID ${killedPid}) and released cron lock.`
+    message: pids.length
+      ? `Terminated active scraper process(es) (PID ${pids.join(", ")}) and released cron lock.`
       : "Aborted running cron batch and released lock.",
   });
 }

@@ -5,6 +5,13 @@ import path from 'path';
 import fs from 'fs';
 import readline from 'readline';
 import { fileURLToPath } from 'url';
+import {
+  LOW_RAM_CHROME_ARGS,
+  pruneProfileCache,
+  closeBrowserSafely,
+  registerShutdownHooks,
+  setupLowRamPage,
+} from './scraperUtils.mjs';
 
 puppeteer.use(StealthPlugin());
 
@@ -173,18 +180,17 @@ async function launchBrowser(headless = false) {
 
   const chromeExe = findChromeExecutable();
 
+  // Remove old browser cache bloat before launch while preserving Cookies & Local Storage
+  pruneProfileCache(USER_DATA_DIR);
+
   const launchOptions = {
     headless: headless ? 'new' : false,
     userDataDir: USER_DATA_DIR,
-    defaultViewport: null,
+    defaultViewport: { width: 1280, height: 720 },
+    protocolTimeout: 300000,
     args: [
-      '--no-sandbox',
-      '--disable-setuid-sandbox',
-      '--disable-dev-shm-usage',
-      '--disable-gpu',
-      '--disable-infobars',
-      '--start-maximized',
-      '--disable-blink-features=AutomationControlled'
+      ...LOW_RAM_CHROME_ARGS,
+      '--window-size=1280,720',
     ]
   };
 
@@ -193,10 +199,14 @@ async function launchBrowser(headless = false) {
   }
 
   const browser = await puppeteer.launch(launchOptions);
+  registerShutdownHooks(() => browser, USER_DATA_DIR);
   const page = (await browser.pages())[0] || (await browser.newPage());
   await page.setUserAgent(
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36'
   );
+  if (headless) {
+    await setupLowRamPage(page);
+  }
 
   return { browser, page };
 }
@@ -231,8 +241,7 @@ async function handleLoginMode() {
   } catch (err) {
     console.error('[DeepSeek Scraper] Error during login session:', err.message);
   } finally {
-    clearInterval(rollingInterval);
-    await browser.close();
+    await closeBrowserSafely(browser, USER_DATA_DIR);
   }
 }
 
@@ -567,7 +576,7 @@ async function scrapeDeepSeek(prompt, options = {}) {
     throw err;
   } finally {
     clearInterval(rollingInterval);
-    await browser.close();
+    await closeBrowserSafely(browser, USER_DATA_DIR);
   }
 }
 
