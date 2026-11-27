@@ -56,6 +56,8 @@ export default function AdminIndividualBooksPage() {
   const [queueingEmpty, setQueueingEmpty] = useState(false);
   const [queueingAudio, setQueueingAudio] = useState(false);
   const [showQueueAudioConfirm, setShowQueueAudioConfirm] = useState(false);
+  const [publishingApproved, setPublishingApproved] = useState(false);
+  const [showPublishApprovedConfirm, setShowPublishApprovedConfirm] = useState(false);
   const [sortBy, setSortBy] = useState("rank_desc");
   const [audioQueueFilter, setAudioQueueFilter] = useState("ALL");
   const [page, setPage] = useState(1);
@@ -382,6 +384,25 @@ export default function AdminIndividualBooksPage() {
     } finally {
       setQueueingAudio(false);
       setShowQueueAudioConfirm(false);
+    }
+  };
+
+  const handlePublishAllApproved = async () => {
+    try {
+      setPublishingApproved(true);
+      const res = await fetch("/api/admin/individualbooks/publish-approved", { method: "POST" });
+      const data = await res.json();
+      if (data.success) {
+        setMessage({ text: data.message, type: "success" });
+        fetchBooks();
+      } else {
+        setMessage({ text: data.error || "Failed to activate approved books", type: "error" });
+      }
+    } catch (err: any) {
+      setMessage({ text: err.message || "Network error", type: "error" });
+    } finally {
+      setPublishingApproved(false);
+      setShowPublishApprovedConfirm(false);
     }
   };
 
@@ -1322,6 +1343,24 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
           >
             {queueingAudio ? "Queueing Audio..." : "🎧 Queue Approved Without Audio"}
           </button>
+          <button
+            type="button"
+            onClick={() => setShowPublishApprovedConfirm(true)}
+            disabled={publishingApproved}
+            style={{
+              backgroundColor: "rgba(59, 130, 246, 0.15)",
+              color: "#60A5FA",
+              border: "1px solid rgba(59, 130, 246, 0.35)",
+              borderRadius: "8px",
+              padding: "8px 14px",
+              fontSize: "0.85rem",
+              fontWeight: 600,
+              cursor: publishingApproved ? "not-allowed" : "pointer",
+              opacity: publishingApproved ? 0.6 : 1,
+            }}
+          >
+            {publishingApproved ? "Activating..." : "🚀 Activate All Approved"}
+          </button>
         </div>
       </div>
 
@@ -2219,6 +2258,41 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
                 }}
               >
                 {queueingAudio ? "Queueing..." : "Yes, Queue Audio"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {showPublishApprovedConfirm && (
+        <div style={styles.modalBackdrop}>
+          <div style={{ ...styles.modalContent, maxWidth: "440px" }}>
+            <h2 style={{ margin: "0 0 12px 0", color: "#60A5FA", fontSize: "1.2rem" }}>
+              🚀 Activate All Approved Books?
+            </h2>
+            <p style={{ margin: "0 0 20px 0", color: "#CBD5E1", fontSize: "0.95rem", lineHeight: 1.5 }}>
+              This will set <strong>Pub Status = ACTIVE</strong> for all books whose AI Content Status is <strong>APPROVED</strong>.
+            </p>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+              <button
+                type="button"
+                onClick={() => setShowPublishApprovedConfirm(false)}
+                disabled={publishingApproved}
+                style={styles.cancelBtn}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handlePublishAllApproved}
+                disabled={publishingApproved}
+                style={{
+                  ...styles.primaryBtn,
+                  backgroundColor: "#3B82F6",
+                  opacity: publishingApproved ? 0.7 : 1,
+                }}
+              >
+                {publishingApproved ? "Activating..." : "Yes, Activate All"}
               </button>
             </div>
           </div>
