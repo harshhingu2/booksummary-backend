@@ -55,6 +55,7 @@ export default function AdminIndividualBooksPage() {
   const [contentPresenceFilter, setContentPresenceFilter] = useState("ALL");
   const [queueingEmpty, setQueueingEmpty] = useState(false);
   const [queueingAudio, setQueueingAudio] = useState(false);
+  const [showQueueAudioConfirm, setShowQueueAudioConfirm] = useState(false);
   const [sortBy, setSortBy] = useState("rank_desc");
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
@@ -378,6 +379,7 @@ export default function AdminIndividualBooksPage() {
       setMessage({ text: err.message || "Network error", type: "error" });
     } finally {
       setQueueingAudio(false);
+      setShowQueueAudioConfirm(false);
     }
   };
 
@@ -1183,6 +1185,26 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
             </select>
           </div>
 
+          <button
+            type="button"
+            onClick={() => fetchBooks()}
+            disabled={loading}
+            style={{
+              backgroundColor: "#1E293B",
+              color: "#F8FAFC",
+              border: "1px solid #334155",
+              borderRadius: "6px",
+              padding: "8px 12px",
+              fontSize: "0.85rem",
+              fontWeight: 600,
+              cursor: loading ? "not-allowed" : "pointer",
+              opacity: loading ? 0.6 : 1,
+            }}
+            title="Refresh list"
+          >
+            🔄 Refresh
+          </button>
+
           <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
             <label style={{ color: "#94A3B8", fontSize: "0.85rem", fontWeight: 600 }}>Production / Queue:</label>
             <select
@@ -1227,7 +1249,7 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
           </button>
           <button
             type="button"
-            onClick={handleQueueMissingAudio}
+            onClick={() => setShowQueueAudioConfirm(true)}
             disabled={queueingAudio}
             style={{
               backgroundColor: "rgba(16, 185, 129, 0.15)",
@@ -2107,6 +2129,41 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
                 )}
               </div>
             )}
+          </div>
+        </div>
+      )}
+
+      {showQueueAudioConfirm && (
+        <div style={styles.modalBackdrop}>
+          <div style={{ ...styles.modalContent, maxWidth: "440px" }}>
+            <h2 style={{ margin: "0 0 12px 0", color: "#34D399", fontSize: "1.2rem" }}>
+              🎧 Queue Approved Books for Audio?
+            </h2>
+            <p style={{ margin: "0 0 20px 0", color: "#CBD5E1", fontSize: "0.95rem", lineHeight: 1.5 }}>
+              This will add all <strong>Approved</strong> books that have content and no audio yet to the audio generation queue.
+            </p>
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: "10px" }}>
+              <button
+                type="button"
+                onClick={() => setShowQueueAudioConfirm(false)}
+                disabled={queueingAudio}
+                style={styles.cancelBtn}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                onClick={handleQueueMissingAudio}
+                disabled={queueingAudio}
+                style={{
+                  ...styles.primaryBtn,
+                  backgroundColor: "#10B981",
+                  opacity: queueingAudio ? 0.7 : 1,
+                }}
+              >
+                {queueingAudio ? "Queueing..." : "Yes, Queue Audio"}
+              </button>
+            </div>
           </div>
         </div>
       )}
