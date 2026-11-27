@@ -50,6 +50,7 @@ export default function AdminShell({ children }: { children: React.ReactNode }) 
     { label: "Dashboard", path: "/admin", icon: "📊" },
     { label: "Cron Control", path: "/admin/crons", icon: "⏰" },
     { label: "Individual Books", path: "/admin/individualbooks", icon: "📖" },
+    { label: "Book Requests", path: "/admin/book-requests", icon: "📩" },
     { label: "Settings", path: "/admin/settings", icon: "⚙️" },
     { label: "Scraper Screenshots", path: "/admin/scraper-screenshots", icon: "📸" },
     { label: "Book Summaries", path: "/admin/books", icon: "📚" },
