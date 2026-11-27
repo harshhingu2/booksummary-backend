@@ -478,16 +478,23 @@ export default function AdminIndividualBooksPage() {
             : "Content approved and published to live book summary!",
           type: "success",
         });
-        setReviewBook((prev) =>
-          prev
-            ? {
-                ...prev,
-                content: targetContent,
-                contentStatus: "APPROVED",
-                ...(queueAudio ? { needsAudioGeneration: true, audioStatus: "PENDING" } : {}),
-              }
-            : null
-        );
+        const currentIdx = books.findIndex((b) => b._id === bookId);
+        const nextBook = currentIdx >= 0 && currentIdx + 1 < books.length ? books[currentIdx + 1] : null;
+        if (nextBook) {
+          setReviewBook(nextBook);
+          setReviewDraftText(nextBook.pendingContent || nextBook.content || "");
+        } else {
+          setReviewBook((prev) =>
+            prev
+              ? {
+                  ...prev,
+                  content: targetContent,
+                  contentStatus: "APPROVED",
+                  ...(queueAudio ? { needsAudioGeneration: true, audioStatus: "PENDING" } : {}),
+                }
+              : null
+          );
+        }
         fetchBooks();
       } else {
         setMessage({ text: data.error || "Failed to approve content", type: "error" });
