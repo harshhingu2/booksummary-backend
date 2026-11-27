@@ -80,6 +80,20 @@ export async function GET(request: NextRequest) {
       query.needsContentGeneration = true;
     }
 
+    const audioQueue = searchParams.get("audioQueue") || "";
+    if (audioQueue === "IN_QUEUE") {
+      query.needsAudioGeneration = true;
+    } else if (audioQueue === "NOT_IN_QUEUE") {
+      query.needsAudioGeneration = { $ne: true };
+    } else if (audioQueue === "HAS_AUDIO") {
+      query.audioUrl = { $exists: true, $nin: [null, ""] };
+    } else if (audioQueue === "NO_AUDIO") {
+      query.$and = [
+        ...(query.$and || []),
+        { $or: [{ audioUrl: { $exists: false } }, { audioUrl: null }, { audioUrl: "" }] },
+      ];
+    }
+
     const sortMap: Record<string, any> = {
       rank_desc: { rank: -1, createdAt: -1 },
       rank_asc: { rank: 1, createdAt: -1 },

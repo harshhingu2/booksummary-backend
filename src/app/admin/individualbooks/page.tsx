@@ -57,6 +57,7 @@ export default function AdminIndividualBooksPage() {
   const [queueingAudio, setQueueingAudio] = useState(false);
   const [showQueueAudioConfirm, setShowQueueAudioConfirm] = useState(false);
   const [sortBy, setSortBy] = useState("rank_desc");
+  const [audioQueueFilter, setAudioQueueFilter] = useState("ALL");
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
   const [totalBooks, setTotalBooks] = useState(0);
@@ -293,6 +294,7 @@ export default function AdminIndividualBooksPage() {
       if (featuredFilter && featuredFilter !== "ALL") params.append("featured", featuredFilter);
       if (contentPresenceFilter && contentPresenceFilter !== "ALL") params.append("contentPresence", contentPresenceFilter);
       if (sortBy) params.append("sortBy", sortBy);
+      if (audioQueueFilter && audioQueueFilter !== "ALL") params.append("audioQueue", audioQueueFilter);
       params.append("page", String(page));
       params.append("limit", String(limit));
 
@@ -333,11 +335,11 @@ export default function AdminIndividualBooksPage() {
 
   useEffect(() => {
     setPage(1);
-  }, [search, statusFilter, contentStatusFilter, categoryFilter, featuredFilter, contentPresenceFilter, sortBy, limit]);
+  }, [search, statusFilter, contentStatusFilter, categoryFilter, featuredFilter, contentPresenceFilter, sortBy, audioQueueFilter, limit]);
 
   useEffect(() => {
     fetchBooks();
-  }, [search, statusFilter, contentStatusFilter, categoryFilter, featuredFilter, contentPresenceFilter, sortBy, page, limit]);
+  }, [search, statusFilter, contentStatusFilter, categoryFilter, featuredFilter, contentPresenceFilter, sortBy, audioQueueFilter, page, limit]);
 
   const handleQueueAllEmpty = async () => {
     const confirmed = window.confirm(
@@ -1189,6 +1191,54 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
               <option value="oldest">Oldest First</option>
               <option value="title_asc">Title: A → Z</option>
               <option value="title_desc">Title: Z → A</option>
+            </select>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <label style={{ color: "#94A3B8", fontSize: "0.85rem", fontWeight: 600 }}>Audio Queue:</label>
+            <select
+              value={audioQueueFilter}
+              onChange={(e) => setAudioQueueFilter(e.target.value)}
+              style={{
+                padding: "8px 12px",
+                backgroundColor: "#1E293B",
+                border: "1px solid #334155",
+                borderRadius: "6px",
+                color: "#F8FAFC",
+                fontSize: "0.85rem",
+                fontWeight: 600,
+                cursor: "pointer",
+                outline: "none",
+              }}
+            >
+              <option value="ALL">All</option>
+              <option value="IN_QUEUE">🎧 In Audio Queue</option>
+              <option value="NOT_IN_QUEUE">Not in Audio Queue</option>
+              <option value="HAS_AUDIO">🔊 Has Audio</option>
+              <option value="NO_AUDIO">🔇 No Audio</option>
+            </select>
+          </div>
+
+          <div style={{ display: "flex", alignItems: "center", gap: "6px" }}>
+            <label style={{ color: "#94A3B8", fontSize: "0.85rem", fontWeight: 600 }}>Audio Queue:</label>
+            <select
+              value={audioQueueFilter}
+              onChange={(e) => setAudioQueueFilter(e.target.value)}
+              style={{
+                padding: "8px 12px",
+                backgroundColor: "#1E293B",
+                border: "1px solid #334155",
+                borderRadius: "6px",
+                color: "#F8FAFC",
+                fontSize: "0.85rem",
+                fontWeight: 600,
+                cursor: "pointer",
+                outline: "none",
+              }}
+            >
+              <option value="ALL">All</option>
+              <option value="IN_QUEUE">🎧 In Audio Queue</option>
+              <option value="NOT_IN_QUEUE">Not in Audio Queue</option>
             </select>
           </div>
 
