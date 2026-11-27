@@ -675,7 +675,7 @@ export default function AdminSettingsPage() {
                       <option value="gemini-3.1-pro-preview">gemini-3.1-pro-preview — Best quality (~50–100/day free)</option>
                       <option value="gemini-3-flash-preview">gemini-3-flash-preview — Medium quality (~250–1,500/day free)</option>
                       <option value="gemini-2.5-flash">gemini-2.5-flash — Legacy Flash (~250–1,500/day free)</option>
-                      <option value="gemini-2.5-flash-lite">gemini-2.5-flash-lite — Fast / Basic quality (~1,000+/day free)</option>
+                      <option value="gemini-3.5-flash-lite">gemini-3.5-flash-lite — Fast / Basic quality (~1,000+/day free)</option>
                     </select>
                   </div>
                 </div>

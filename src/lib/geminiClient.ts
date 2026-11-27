@@ -45,7 +45,12 @@ export async function generateWithGemini(
   prompt: string
 ): Promise<string> {
   const rawModel = (account.model || "gemini-3-flash-preview").trim();
-  const model = rawModel === "gemini-2.5-pro" ? "gemini-3.1-pro-preview" : rawModel;
+  const model =
+    rawModel === "gemini-2.5-pro"
+      ? "gemini-3.1-pro-preview"
+      : rawModel === "gemini-2.5-flash-lite"
+      ? "gemini-3.5-flash-lite"
+      : rawModel;
   const apiKey = account.apiKey.trim();
   if (!apiKey) {
     throw new Error(`Gemini account "${account.label || account.id}" has no API key.`);
