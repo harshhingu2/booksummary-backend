@@ -68,6 +68,30 @@ const DEFAULT_SETTINGS: Record<string, { value: any; description: string }> = {
     ],
     description: "List of Gemini API accounts (rotated round-robin)",
   },
+  audioVoice: {
+    value: "en-US-ChristopherNeural",
+    description: "Default Microsoft Edge Neural TTS voice for book audio generation",
+  },
+  showAudio: {
+    value: true,
+    description: "Global toggle to show or hide audio across the app",
+  },
+  audioRate: {
+    value: "-4%",
+    description: "Speech rate adjustment for Edge TTS (e.g. -4%, 0%, +5%)",
+  },
+  audioPitch: {
+    value: "-2Hz",
+    description: "Pitch adjustment for Edge TTS (e.g. -2Hz, 0Hz)",
+  },
+  audioConcurrency: {
+    value: 3,
+    description: "Number of concurrent books to generate audio for in parallel (1-5 recommended)",
+  },
+  audioBatchSize: {
+    value: 10,
+    description: "Max number of books processed per Audio Cron execution",
+  },
 };
 
 export async function GET() {

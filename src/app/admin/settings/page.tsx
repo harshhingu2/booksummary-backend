@@ -25,6 +25,12 @@ interface SettingsState {
   geminiConcurrencyLimit: number;
   geminiTotalBooksLimit: number;
   geminiAccounts: GeminiAccountItem[];
+  audioVoice: string;
+  audioRate: string;
+  audioPitch: string;
+  audioConcurrency: number;
+  audioBatchSize: number;
+  showAudio: boolean;
 }
 
 export default function AdminSettingsPage() {
@@ -44,6 +50,12 @@ export default function AdminSettingsPage() {
       { id: "acc-1", label: "Account 1", apiKey: "", model: "gemini-2.5-flash", isActive: true },
       { id: "acc-2", label: "Account 2", apiKey: "", model: "gemini-2.5-flash", isActive: true },
     ],
+    audioVoice: "en-US-ChristopherNeural",
+    audioRate: "-4%",
+    audioPitch: "-2Hz",
+    audioConcurrency: 3,
+    audioBatchSize: 10,
+    showAudio: true,
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -67,12 +79,18 @@ export default function AdminSettingsPage() {
           multibookCronMaxDelaySeconds: Number(data.settings.multibookCronMaxDelaySeconds) ?? 150,
           geminiConcurrencyLimit: Number(data.settings.geminiConcurrencyLimit) || 2,
           geminiTotalBooksLimit: Number(data.settings.geminiTotalBooksLimit) || 10,
+          showAudio: data.settings.showAudio !== false,
           geminiAccounts: Array.isArray(data.settings.geminiAccounts) && data.settings.geminiAccounts.length > 0
             ? data.settings.geminiAccounts
             : [
                 { id: "acc-1", label: "Account 1", apiKey: "", model: "gemini-2.5-flash", isActive: true },
                 { id: "acc-2", label: "Account 2", apiKey: "", model: "gemini-2.5-flash", isActive: true },
               ],
+          audioVoice: data.settings.audioVoice || "en-US-ChristopherNeural",
+          audioRate: data.settings.audioRate || "-4%",
+          audioPitch: data.settings.audioPitch || "-2Hz",
+          audioConcurrency: Number(data.settings.audioConcurrency) || 3,
+          audioBatchSize: Number(data.settings.audioBatchSize) || 10,
         });
       }
     } catch (err) {
@@ -715,6 +733,145 @@ export default function AdminSettingsPage() {
                 </button>
               </div>
             </div>
+          </div>
+
+          {/* Audio Generation Settings */}
+          <div style={{ ...styles.card, marginTop: "24px" }}>
+            <div style={styles.sectionHeader}>
+              <div>
+                <h2 style={styles.sectionTitle}>🎧 Audio Generation (Microsoft Edge Neural TTS)</h2>
+                <p style={styles.sectionSubtitle}>
+                  Configure voice, speed, pitch, and parallel concurrency for automated book audio generation.
+                </p>
+              </div>
+            </div>
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "16px", marginTop: "16px" }}>
+              <div style={styles.fieldGroup}>
+                <label style={styles.label}>Narrator Voice</label>
+                <p style={styles.fieldHint}>ChristopherNeural is recommended for non-fiction audiobooks.</p>
+                <select
+                  value={settings.audioVoice}
+                  onChange={(e) => setSettings({ ...settings, audioVoice: e.target.value })}
+                  style={{
+                    backgroundColor: "#0F172A",
+                    color: "#F8FAFC",
+                    border: "1px solid #334155",
+                    borderRadius: "8px",
+                    padding: "10px 12px",
+                    fontSize: "0.9rem",
+                  }}
+                >
+                  <option value="en-US-ChristopherNeural">en-US-ChristopherNeural (Best - Deep Male Narrator)</option>
+                  <option value="en-US-EricNeural">en-US-EricNeural (Modern Male Podcast)</option>
+                  <option value="en-US-GuyNeural">en-US-GuyNeural (Warm Male)</option>
+                  <option value="en-US-JennyNeural">en-US-JennyNeural (Clear Female)</option>
+                  <option value="en-GB-RyanNeural">en-GB-RyanNeural (British Male)</option>
+                </select>
+              </div>
+
+              <div style={styles.fieldGroup}>
+                <label style={styles.label}>Concurrent Workers (1–5)</label>
+                <p style={styles.fieldHint}>How many books to generate in parallel per Audio Cron batch.</p>
+                <input
+                  type="number"
+                  min={1}
+                  max={10}
+                  value={settings.audioConcurrency}
+                  onChange={(e) =>
+                    setSettings({ ...settings, audioConcurrency: Math.max(1, Number(e.target.value) || 1) })
+                  }
+                  style={{
+                    backgroundColor: "#0F172A",
+                    color: "#F8FAFC",
+                    border: "1px solid #334155",
+                    borderRadius: "8px",
+                    padding: "10px 12px",
+                    fontSize: "0.9rem",
+                  }}
+                />
+              </div>
+
+              <div style={styles.fieldGroup}>
+                <label style={styles.label}>Speech Rate Adjustment</label>
+                <p style={styles.fieldHint}>e.g. -4% (relaxed audiobook pace), 0% (default)</p>
+                <input
+                  type="text"
+                  value={settings.audioRate}
+                  onChange={(e) => setSettings({ ...settings, audioRate: e.target.value })}
+                  placeholder="-4%"
+                  style={{
+                    backgroundColor: "#0F172A",
+                    color: "#F8FAFC",
+                    border: "1px solid #334155",
+                    borderRadius: "8px",
+                    padding: "10px 12px",
+                    fontSize: "0.9rem",
+                  }}
+                />
+              </div>
+
+              <div style={styles.fieldGroup}>
+                <label style={styles.label}>Pitch Adjustment</label>
+                <p style={styles.fieldHint}>e.g. -2Hz (slightly deeper), 0Hz (natural)</p>
+                <input
+                  type="text"
+                  value={settings.audioPitch}
+                  onChange={(e) => setSettings({ ...settings, audioPitch: e.target.value })}
+                  placeholder="-2Hz"
+                  style={{
+                    backgroundColor: "#0F172A",
+                    color: "#F8FAFC",
+                    border: "1px solid #334155",
+                    borderRadius: "8px",
+                    padding: "10px 12px",
+                    fontSize: "0.9rem",
+                  }}
+                />
+              </div>
+
+              <div style={styles.fieldGroup}>
+                <label style={styles.label}>Batch Size per Cron Run</label>
+                <p style={styles.fieldHint}>Max books processed each time the Audio Cron runs.</p>
+                <input
+                  type="number"
+                  min={1}
+                  max={50}
+                  value={settings.audioBatchSize}
+                  onChange={(e) =>
+                    setSettings({ ...settings, audioBatchSize: Math.max(1, Number(e.target.value) || 1) })
+                  }
+                  style={{
+                    backgroundColor: "#0F172A",
+                    color: "#F8FAFC",
+                    border: "1px solid #334155",
+                    borderRadius: "8px",
+                    padding: "10px 12px",
+                    fontSize: "0.9rem",
+                  }}
+                />
+              </div>
+            </div>
+          </div>
+
+          {/* Global Audio Visibility Toggle */}
+          <div style={{ ...styles.fieldGroup, marginTop: "24px", paddingTop: "20px", borderTop: "1px solid #334155" }}>
+            <label style={{ display: "flex", alignItems: "center", gap: "12px", cursor: "pointer" }}>
+              <input
+                type="checkbox"
+                checked={settings.showAudio}
+                onChange={(e) => setSettings({ ...settings, showAudio: e.target.checked })}
+                style={{ width: "18px", height: "18px", cursor: "pointer" }}
+              />
+              <div>
+                <div style={{ fontWeight: 700, color: "#F8FAFC", fontSize: "0.95rem" }}>
+                  🔊 Show Audio (Global Toggle)
+                </div>
+                <div style={{ color: "#94A3B8", fontSize: "0.8rem", marginTop: "2px" }}>
+                  On by default. Turn off to hide all audio across the app.
+                </div>
+              </div>
+            </label>
           </div>
 
           <div style={{ marginTop: "32px", display: "flex", justifyContent: "flex-end" }}>

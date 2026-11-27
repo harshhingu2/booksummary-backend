@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
 
 const accountId = process.env.R2_ACCOUNT_ID || "";
 const accessKeyId = process.env.R2_ACCESS_KEY_ID || "";
@@ -43,4 +43,29 @@ export async function uploadToR2({
     return `${publicUrl}/${key}`;
   }
   return `https://${bucketName}.${accountId}.r2.cloudflarestorage.com/${key}`;
+}
+
+export async function deleteFromR2(fileUrlOrKey: string): Promise<boolean> {
+  if (!fileUrlOrKey) return false;
+  let key = fileUrlOrKey;
+  if (fileUrlOrKey.startsWith("http")) {
+    try {
+      const url = new URL(fileUrlOrKey);
+      key = url.pathname.replace(/^\/+/, "");
+      // If using path-style URL with bucketName prefix, strip bucketName/
+      if (bucketName && key.startsWith(`${bucketName}/`)) {
+        key = key.slice(bucketName.length + 1);
+      }
+    } catch {
+      return false;
+    }
+  }
+  if (!key) return false;
+
+  const command = new DeleteObjectCommand({
+    Bucket: bucketName,
+    Key: key,
+  });
+  await r2Client.send(command);
+  return true;
 }

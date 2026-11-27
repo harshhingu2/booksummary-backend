@@ -37,6 +37,9 @@ interface IndividualBookItem {
   rank?: number;
   status: "ACTIVE" | "INACTIVE" | "PENDING";
   needsContentGeneration?: boolean;
+  needsAudioGeneration?: boolean;
+  audioStatus?: "NONE" | "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED";
+  audioError?: string;
   createdAt: string;
 }
 
@@ -51,6 +54,7 @@ export default function AdminIndividualBooksPage() {
   const [featuredFilter, setFeaturedFilter] = useState("ALL");
   const [contentPresenceFilter, setContentPresenceFilter] = useState("ALL");
   const [queueingEmpty, setQueueingEmpty] = useState(false);
+  const [queueingAudio, setQueueingAudio] = useState(false);
   const [sortBy, setSortBy] = useState("rank_desc");
   const [page, setPage] = useState(1);
   const [limit, setLimit] = useState(20);
@@ -359,6 +363,24 @@ export default function AdminIndividualBooksPage() {
     }
   };
 
+  const handleQueueMissingAudio = async () => {
+    try {
+      setQueueingAudio(true);
+      const res = await fetch("/api/admin/individualbooks/queue-missing-audio", { method: "POST" });
+      const data = await res.json();
+      if (data.success) {
+        setMessage({ text: data.message, type: "success" });
+        fetchBooks();
+      } else {
+        setMessage({ text: data.error || "Failed to queue books for audio", type: "error" });
+      }
+    } catch (err: any) {
+      setMessage({ text: err.message || "Network error", type: "error" });
+    } finally {
+      setQueueingAudio(false);
+    }
+  };
+
   const handleOpenAddModal = () => {
     setEditingId(null);
     const defaultCat = categories.find((c) => c.name.toLowerCase() === "productivity") || categories[0];
@@ -427,7 +449,7 @@ export default function AdminIndividualBooksPage() {
     }
   };
 
-  const handleApproveDraft = async (bookId: string, customContent?: string) => {
+  const handleApproveDraft = async (bookId: string, customContent?: string, queueAudio: boolean = false) => {
     const targetContent = customContent !== undefined ? customContent : reviewDraftText;
     const wordCount = targetContent.replace(/<[^>]*>/g, " ").trim().split(/\s+/).filter(Boolean).length;
     const calculatedReadingTime = wordCount > 0 ? Math.max(1, Math.round(wordCount / 200)) : undefined;
@@ -441,13 +463,28 @@ export default function AdminIndividualBooksPage() {
           content: targetContent,
           contentStatus: "APPROVED",
           ...(calculatedReadingTime ? { readingTimeMinutes: calculatedReadingTime } : {}),
+          ...(queueAudio
+            ? { needsAudioGeneration: true, audioStatus: "PENDING", audioError: "" }
+            : {}),
         }),
       });
       const data = await res.json();
       if (data.success) {
-        setMessage({ text: "Content approved and published to live book summary!", type: "success" });
+        setMessage({
+          text: queueAudio
+            ? "Content approved and added to Audio Queue!"
+            : "Content approved and published to live book summary!",
+          type: "success",
+        });
         setReviewBook((prev) =>
-          prev ? { ...prev, content: targetContent, contentStatus: "APPROVED" } : null
+          prev
+            ? {
+                ...prev,
+                content: targetContent,
+                contentStatus: "APPROVED",
+                ...(queueAudio ? { needsAudioGeneration: true, audioStatus: "PENDING" } : {}),
+              }
+            : null
         );
         fetchBooks();
       } else {
@@ -457,6 +494,41 @@ export default function AdminIndividualBooksPage() {
       setMessage({ text: err.message || "Failed to approve content", type: "error" });
     } finally {
       setReviewActionLoading(false);
+    }
+  };
+
+  const handleQueueAudio = async (bookId: string) => {
+    try {
+      const res = await fetch(`/api/admin/individualbooks/${bookId}/audio`, {
+        method: "POST",
+      });
+      const data = await res.json();
+      if (data.success) {
+        setMessage({ text: "Book added to Audio Queue!", type: "success" });
+        fetchBooks();
+      } else {
+        setMessage({ text: data.error || "Failed to queue audio", type: "error" });
+      }
+    } catch (err: any) {
+      setMessage({ text: err.message || "Failed to queue audio", type: "error" });
+    }
+  };
+
+  const handleDeleteAudio = async (bookId: string) => {
+    if (!confirm("Delete this book's audio from Cloudflare R2 and database?")) return;
+    try {
+      const res = await fetch(`/api/admin/individualbooks/${bookId}/audio`, {
+        method: "DELETE",
+      });
+      const data = await res.json();
+      if (data.success) {
+        setMessage({ text: "Audio deleted from Cloudflare R2 and database.", type: "success" });
+        fetchBooks();
+      } else {
+        setMessage({ text: data.error || "Failed to delete audio", type: "error" });
+      }
+    } catch (err: any) {
+      setMessage({ text: err.message || "Failed to delete audio", type: "error" });
     }
   };
 
@@ -1153,6 +1225,24 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
           >
             {queueingEmpty ? "Queueing..." : "⚡ Queue All Empty"}
           </button>
+          <button
+            type="button"
+            onClick={handleQueueMissingAudio}
+            disabled={queueingAudio}
+            style={{
+              backgroundColor: "rgba(16, 185, 129, 0.15)",
+              color: "#34D399",
+              border: "1px solid rgba(16, 185, 129, 0.35)",
+              borderRadius: "8px",
+              padding: "8px 14px",
+              fontSize: "0.85rem",
+              fontWeight: 600,
+              cursor: queueingAudio ? "not-allowed" : "pointer",
+              opacity: queueingAudio ? 0.6 : 1,
+            }}
+          >
+            {queueingAudio ? "Queueing Audio..." : "🎧 Queue Approved Without Audio"}
+          </button>
         </div>
       </div>
 
@@ -1252,18 +1342,93 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
                     </td>
                     <td style={styles.td}>{book.readingTimeMinutes} mins</td>
                     <td style={styles.td}>
-                      {book.audioUrl ? (
-                        <a
-                          href={book.audioUrl}
-                          target="_blank"
-                          rel="noreferrer"
-                          style={{ color: "#10B981", fontSize: "0.75rem", fontWeight: 600, textDecoration: "none" }}
-                        >
-                          🎧 Has Audio
-                        </a>
-                      ) : (
-                        <span style={{ color: "#64748B", fontSize: "0.75rem" }}>None</span>
-                      )}
+                      <div style={{ display: "flex", alignItems: "center", gap: "6px", flexWrap: "wrap" }}>
+                        {book.audioUrl ? (
+                          <>
+                            <a
+                              href={book.audioUrl}
+                              target="_blank"
+                              rel="noreferrer"
+                              style={{ color: "#10B981", fontSize: "0.75rem", fontWeight: 600, textDecoration: "none" }}
+                            >
+                              🎧 Has Audio
+                            </a>
+                            <button
+                              type="button"
+                              onClick={() => handleDeleteAudio(book._id)}
+                              title="Delete Audio from Cloudflare R2 & DB"
+                              style={{
+                                background: "rgba(239, 68, 68, 0.15)",
+                                color: "#F87171",
+                                border: "1px solid rgba(239, 68, 68, 0.3)",
+                                borderRadius: "4px",
+                                padding: "2px 6px",
+                                fontSize: "0.7rem",
+                                cursor: "pointer",
+                              }}
+                            >
+                              🗑️
+                            </button>
+                          </>
+                        ) : book.audioStatus === "PROCESSING" ? (
+                          <span style={{ color: "#38BDF8", fontSize: "0.75rem", fontWeight: 600 }}>
+                            ⏳ Generating...
+                          </span>
+                        ) : book.needsAudioGeneration || book.audioStatus === "PENDING" ? (
+                          <span style={{ color: "#FBBF24", fontSize: "0.75rem", fontWeight: 600 }}>
+                            🕒 Audio Queued
+                          </span>
+                        ) : book.audioStatus === "FAILED" ? (
+                          <>
+                            <span
+                              title={book.audioError || "Audio generation failed"}
+                              style={{ color: "#F87171", fontSize: "0.75rem", fontWeight: 600 }}
+                            >
+                              ⚠️ Failed
+                            </span>
+                            {book.content && (
+                              <button
+                                type="button"
+                                onClick={() => handleQueueAudio(book._id)}
+                                style={{
+                                  background: "rgba(59, 130, 246, 0.15)",
+                                  color: "#60A5FA",
+                                  border: "1px solid rgba(59, 130, 246, 0.3)",
+                                  borderRadius: "4px",
+                                  padding: "2px 6px",
+                                  fontSize: "0.7rem",
+                                  cursor: "pointer",
+                                }}
+                              >
+                                🔄 Retry
+                              </button>
+                            )}
+                          </>
+                        ) : (
+                          <>
+                            <span style={{ color: "#64748B", fontSize: "0.75rem", fontWeight: 600 }}>
+                              🔇 No Audio
+                            </span>
+                            {book.content && (
+                              <button
+                                type="button"
+                                onClick={() => handleQueueAudio(book._id)}
+                                style={{
+                                  background: "rgba(16, 185, 129, 0.15)",
+                                  color: "#34D399",
+                                  border: "1px solid rgba(16, 185, 129, 0.3)",
+                                  borderRadius: "4px",
+                                  padding: "2px 6px",
+                                  fontSize: "0.7rem",
+                                  cursor: "pointer",
+                                }}
+                              >
+                                + Queue
+                              </button>
+                            )}
+                          </>
+                        )}
+                      </div>
                     </td>
                     <td style={styles.td}>
                       <select
@@ -1700,6 +1865,60 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
               </button>
             </div>
 
+            {/* Modal Actions (Top) */}
+            <div style={{ ...styles.modalActions, marginBottom: "16px", borderBottom: "1px solid #334155", paddingBottom: "14px", marginTop: 0 }}>
+              <button
+                type="button"
+                onClick={() => setReviewModalOpen(false)}
+                style={styles.cancelBtn}
+                disabled={reviewActionLoading}
+              >
+                Close
+              </button>
+              <button
+                type="button"
+                onClick={() => handleSaveDraftOnly(reviewBook._id)}
+                disabled={reviewActionLoading || !reviewDraftText}
+                style={{
+                  ...styles.cancelBtn,
+                  backgroundColor: "#334155",
+                  color: "#F8FAFC",
+                  fontWeight: 600,
+                }}
+              >
+                💾 Save Draft Edits
+              </button>
+              <button
+                type="button"
+                onClick={() => handleRejectDraft(reviewBook._id)}
+                disabled={reviewActionLoading}
+                style={{
+                  padding: "10px 16px",
+                  backgroundColor: "#EF4444",
+                  color: "#FFFFFF",
+                  border: "none",
+                  borderRadius: "8px",
+                  fontWeight: 600,
+                  cursor: "pointer",
+                }}
+              >
+                ❌ Reject Draft
+              </button>
+              <button
+                type="button"
+                onClick={() => handleApproveDraft(reviewBook._id, reviewDraftText)}
+                disabled={reviewActionLoading || !reviewDraftText}
+                style={{
+                  ...styles.primaryBtn,
+                  backgroundColor: "#10B981",
+                  padding: "10px 20px",
+                  fontWeight: 700,
+                }}
+              >
+                {reviewActionLoading ? "Processing..." : "✅ Approve & Publish to Live Content"}
+              </button>
+            </div>
+
             {/* Tab 1: Rendered HTML Preview */}
             {reviewTab === "preview" && (
               <div>
@@ -1888,60 +2107,6 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
                 )}
               </div>
             )}
-
-            {/* Modal Actions */}
-            <div style={{ ...styles.modalActions, marginTop: "20px", borderTop: "1px solid #334155", paddingTop: "14px" }}>
-              <button
-                type="button"
-                onClick={() => setReviewModalOpen(false)}
-                style={styles.cancelBtn}
-                disabled={reviewActionLoading}
-              >
-                Close
-              </button>
-              <button
-                type="button"
-                onClick={() => handleSaveDraftOnly(reviewBook._id)}
-                disabled={reviewActionLoading || !reviewDraftText}
-                style={{
-                  ...styles.cancelBtn,
-                  backgroundColor: "#334155",
-                  color: "#F8FAFC",
-                  fontWeight: 600,
-                }}
-              >
-                💾 Save Draft Edits
-              </button>
-              <button
-                type="button"
-                onClick={() => handleRejectDraft(reviewBook._id)}
-                disabled={reviewActionLoading}
-                style={{
-                  padding: "10px 16px",
-                  backgroundColor: "#EF4444",
-                  color: "#FFFFFF",
-                  border: "none",
-                  borderRadius: "8px",
-                  fontWeight: 600,
-                  cursor: "pointer",
-                }}
-              >
-                ❌ Reject Draft
-              </button>
-              <button
-                type="button"
-                onClick={() => handleApproveDraft(reviewBook._id, reviewDraftText)}
-                disabled={reviewActionLoading || !reviewDraftText}
-                style={{
-                  ...styles.primaryBtn,
-                  backgroundColor: "#10B981",
-                  padding: "10px 20px",
-                  fontWeight: 700,
-                }}
-              >
-                {reviewActionLoading ? "Processing..." : "✅ Approve & Publish to Live Content"}
-              </button>
-            </div>
           </div>
         </div>
       )}

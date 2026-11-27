@@ -580,6 +580,13 @@ export default function AdminCronsPage() {
                   </button>
                   <button
                     type="button"
+                    onClick={() => setFormData((prev) => ({ ...prev, endpoint: "/api/cron/audio-generation", name: prev.name || "Individual Books Audio Generation" }))}
+                    style={{ padding: "4px 8px", fontSize: "0.72rem", borderRadius: "4px", backgroundColor: "#334155", color: "#34D399", border: "1px solid #475569", cursor: "pointer" }}
+                  >
+                    🎧 Preset: Audio Queue (/api/cron/audio-generation)
+                  </button>
+                  <button
+                    type="button"
                     onClick={() => setFormData((prev) => ({ ...prev, endpoint: "/api/cron/youtube", name: prev.name || "YouTube Shorts Auto Ingestion" }))}
                     style={{ padding: "4px 8px", fontSize: "0.72rem", borderRadius: "4px", backgroundColor: "#334155", color: "#F87171", border: "1px solid #475569", cursor: "pointer" }}
                   >

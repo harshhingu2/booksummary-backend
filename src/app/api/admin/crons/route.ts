@@ -50,6 +50,12 @@ export async function GET() {
         endpoint: "/api/cron/multibook-content",
         isActive: true,
       },
+      {
+        name: "Individual Books Audio Generation",
+        schedule: "*/5 * * * *",
+        endpoint: "/api/cron/audio-generation",
+        isActive: false,
+      },
     ];
 
     let seededAny = false;

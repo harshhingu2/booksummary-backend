@@ -24,6 +24,9 @@ export interface IIndividualBook extends Document {
   isFeatured?: boolean;
   status: "ACTIVE" | "INACTIVE" | "PENDING";
   needsContentGeneration?: boolean;
+  needsAudioGeneration?: boolean;
+  audioStatus?: "NONE" | "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED";
+  audioError?: string;
   rank?: number; // 0-100 ranking score for sorting in categories
   createdAt: Date;
   updatedAt: Date;
@@ -68,6 +71,21 @@ const IndividualBookSchema = new Schema<IIndividualBook>(
       type: Boolean,
       default: false,
       index: true,
+    },
+    needsAudioGeneration: {
+      type: Boolean,
+      default: false,
+      index: true,
+    },
+    audioStatus: {
+      type: String,
+      enum: ["NONE", "PENDING", "PROCESSING", "COMPLETED", "FAILED"],
+      default: "NONE",
+      index: true,
+    },
+    audioError: {
+      type: String,
+      default: "",
     },
   },
   {
