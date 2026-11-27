@@ -13,7 +13,7 @@ import {
   releaseCronLock,
   runLockedScraper,
 } from "@/lib/cronLock";
-import { getGeminiConfig, generateWithGemini } from "@/lib/geminiClient";
+import { getGeminiConfig, generateWithGemini, runGeminiWorkerPool } from "@/lib/geminiClient";
 
 const LOCK_KEY = "__individualCronLock";
 
@@ -138,33 +138,29 @@ export async function GET(request: NextRequest) {
 
     if (scraperEngine === "gemini" && geminiConfig) {
       const { accounts, concurrencyLimit } = geminiConfig;
-      for (let i = 0; i < pendingBooks.length; i += concurrencyLimit) {
-        if (isCronAborted(LOCK_KEY)) {
-          console.log("[Cron Individual AI] Aborted by admin kill request.");
-          break;
+      await runGeminiWorkerPool(
+        pendingBooks,
+        accounts,
+        concurrencyLimit,
+        () => isCronAborted(LOCK_KEY),
+        async (book, account) => {
+          try {
+            console.log(`[Cron Individual AI] Generating content for "${book.title}" via Gemini (${account.label} / ${account.model})...`);
+            const generatedContent = await generateWithGemini(account, buildPrompt(book));
+            await IndividualBook.findByIdAndUpdate(book._id, {
+              pendingContent: generatedContent,
+              pendingContentGeneratedAt: new Date(),
+              contentStatus: "PENDING_REVIEW",
+              needsContentGeneration: false,
+            });
+            results.push({ id: book._id.toString(), title: book.title, success: true });
+            console.log(`[Cron Individual AI] Completed "${book.title}" via Gemini (${account.label}).`);
+          } catch (err: any) {
+            console.error(`[Cron Individual AI Error] Failed for "${book.title}" (Gemini / ${account.label}):`, err.message);
+            results.push({ id: book._id.toString(), title: book.title, success: false, error: err.message });
+          }
         }
-        const chunk = pendingBooks.slice(i, i + concurrencyLimit);
-        await Promise.all(
-          chunk.map(async (book, offset) => {
-            const account = accounts[(i + offset) % accounts.length];
-            try {
-              console.log(`[Cron Individual AI] Generating content for "${book.title}" via Gemini (${account.label} / ${account.model})...`);
-              const generatedContent = await generateWithGemini(account, buildPrompt(book));
-              await IndividualBook.findByIdAndUpdate(book._id, {
-                pendingContent: generatedContent,
-                pendingContentGeneratedAt: new Date(),
-                contentStatus: "PENDING_REVIEW",
-                needsContentGeneration: false,
-              });
-              results.push({ id: book._id.toString(), title: book.title, success: true });
-              console.log(`[Cron Individual AI] Completed "${book.title}" via Gemini.`);
-            } catch (err: any) {
-              console.error(`[Cron Individual AI Error] Failed for "${book.title}" (Gemini):`, err.message);
-              results.push({ id: book._id.toString(), title: book.title, success: false, error: err.message });
-            }
-          })
-        );
-      }
+      );
     } else {
       for (const book of pendingBooks) {
         if (isCronAborted(LOCK_KEY)) {

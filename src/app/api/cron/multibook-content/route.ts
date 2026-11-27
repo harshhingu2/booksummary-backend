@@ -13,7 +13,7 @@ import {
   releaseCronLock,
   runLockedScraper,
 } from "@/lib/cronLock";
-import { getGeminiConfig, generateWithGemini } from "@/lib/geminiClient";
+import { getGeminiConfig, generateWithGemini, runGeminiWorkerPool } from "@/lib/geminiClient";
 
 const LOCK_KEY = "__multibookCronLock";
 
@@ -133,33 +133,29 @@ export async function GET(request: NextRequest) {
 
     if (scraperEngine === "gemini" && geminiConfig) {
       const { accounts, concurrencyLimit } = geminiConfig;
-      for (let i = 0; i < pendingSummaries.length; i += concurrencyLimit) {
-        if (isCronAborted(LOCK_KEY)) {
-          console.log("[Cron MultiBook AI] Aborted by admin kill request.");
-          break;
+      await runGeminiWorkerPool(
+        pendingSummaries,
+        accounts,
+        concurrencyLimit,
+        () => isCronAborted(LOCK_KEY),
+        async (summary, account) => {
+          try {
+            console.log(`[Cron MultiBook AI] Generating content for "${summary.title}" via Gemini (${account.label} / ${account.model})...`);
+            const generatedContent = await generateWithGemini(account, buildPrompt(summary));
+            await BookSummary.findByIdAndUpdate(summary._id, {
+              pendingContent: generatedContent,
+              pendingContentGeneratedAt: new Date(),
+              contentStatus: "PENDING_REVIEW",
+              needsContentGeneration: false,
+            });
+            results.push({ id: summary._id.toString(), title: summary.title, success: true });
+            console.log(`[Cron MultiBook AI] Completed "${summary.title}" via Gemini (${account.label}).`);
+          } catch (err: any) {
+            console.error(`[Cron MultiBook AI Error] Failed for "${summary.title}" (Gemini / ${account.label}):`, err.message);
+            results.push({ id: summary._id.toString(), title: summary.title, success: false, error: err.message });
+          }
         }
-        const chunk = pendingSummaries.slice(i, i + concurrencyLimit);
-        await Promise.all(
-          chunk.map(async (summary, offset) => {
-            const account = accounts[(i + offset) % accounts.length];
-            try {
-              console.log(`[Cron MultiBook AI] Generating content for "${summary.title}" via Gemini (${account.label} / ${account.model})...`);
-              const generatedContent = await generateWithGemini(account, buildPrompt(summary));
-              await BookSummary.findByIdAndUpdate(summary._id, {
-                pendingContent: generatedContent,
-                pendingContentGeneratedAt: new Date(),
-                contentStatus: "PENDING_REVIEW",
-                needsContentGeneration: false,
-              });
-              results.push({ id: summary._id.toString(), title: summary.title, success: true });
-              console.log(`[Cron MultiBook AI] Completed "${summary.title}" via Gemini.`);
-            } catch (err: any) {
-              console.error(`[Cron MultiBook AI Error] Failed for "${summary.title}" (Gemini):`, err.message);
-              results.push({ id: summary._id.toString(), title: summary.title, success: false, error: err.message });
-            }
-          })
-        );
-      }
+      );
     } else {
       for (const summary of pendingSummaries) {
         if (isCronAborted(LOCK_KEY)) {

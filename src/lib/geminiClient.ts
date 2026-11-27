@@ -44,7 +44,8 @@ export async function generateWithGemini(
   account: GeminiAccount,
   prompt: string
 ): Promise<string> {
-  const model = (account.model || "gemini-2.5-flash").trim();
+  const rawModel = (account.model || "gemini-3-flash-preview").trim();
+  const model = rawModel === "gemini-2.5-pro" ? "gemini-3.1-pro-preview" : rawModel;
   const apiKey = account.apiKey.trim();
   if (!apiKey) {
     throw new Error(`Gemini account "${account.label || account.id}" has no API key.`);
@@ -83,4 +84,66 @@ export async function generateWithGemini(
   }
 
   return text;
+}
+
+const ACTIVE_BOOKS_KEY = "__activeGeminiBookIds";
+
+function getActiveBookSet(): Set<string> {
+  const g = globalThis as unknown as Record<string, Set<string> | undefined>;
+  if (!g[ACTIVE_BOOKS_KEY]) {
+    g[ACTIVE_BOOKS_KEY] = new Set<string>();
+  }
+  return g[ACTIVE_BOOKS_KEY]!;
+}
+
+/**
+ * Run a parallel worker pool across all active Gemini accounts.
+ * Each account runs up to `concurrencyPerAccount` workers concurrently,
+ * pulling the next unlocked item from the queue using an in-memory RAM lock
+ * so two accounts never process the same item at the same time.
+ */
+export async function runGeminiWorkerPool<T extends { _id: any }>(
+  items: T[],
+  accounts: GeminiAccount[],
+  concurrencyPerAccount: number,
+  isAborted: () => boolean,
+  processItem: (item: T, account: GeminiAccount) => Promise<void>
+): Promise<void> {
+  const activeSet = getActiveBookSet();
+  let cursor = 0;
+
+  const claimNextItem = (): T | null => {
+    while (cursor < items.length) {
+      const candidate = items[cursor++];
+      const id = candidate._id.toString();
+      if (activeSet.has(id)) {
+        continue; // Already being scraped in RAM, skip to next
+      }
+      activeSet.add(id);
+      return candidate;
+    }
+    return null;
+  };
+
+  const workers: Promise<void>[] = [];
+  for (const account of accounts) {
+    for (let w = 0; w < concurrencyPerAccount; w++) {
+      workers.push(
+        (async () => {
+          while (!isAborted()) {
+            const item = claimNextItem();
+            if (!item) break;
+            const id = item._id.toString();
+            try {
+              await processItem(item, account);
+            } finally {
+              activeSet.delete(id);
+            }
+          }
+        })()
+      );
+    }
+  }
+
+  await Promise.all(workers);
 }
