@@ -13,6 +13,7 @@ import {
   releaseCronLock,
   runLockedScraper,
 } from "@/lib/cronLock";
+import { getGeminiConfig, generateWithGemini } from "@/lib/geminiClient";
 
 const LOCK_KEY = "__individualCronLock";
 
@@ -44,8 +45,17 @@ export async function GET(request: NextRequest) {
     const individualSetting = await AdminSetting.findOne({ key: "individualAiScraper" });
     const defaultSetting = !individualSetting ? await AdminSetting.findOne({ key: "defaultAiScraper" }) : null;
     const selectedScraperValue = individualSetting?.value ?? defaultSetting?.value;
-    const scraperEngine: "chatgpt" | "deepseek" =
-      String(selectedScraperValue).toLowerCase() === "chatgpt" ? "chatgpt" : "deepseek";
+    const selectedRaw = String(selectedScraperValue).toLowerCase();
+    const scraperEngine: "chatgpt" | "deepseek" | "gemini" =
+      selectedRaw === "chatgpt" ? "chatgpt" : selectedRaw === "gemini" ? "gemini" : "deepseek";
+
+    const geminiConfig = scraperEngine === "gemini" ? await getGeminiConfig() : null;
+    if (scraperEngine === "gemini" && (!geminiConfig || geminiConfig.accounts.length === 0)) {
+      return NextResponse.json(
+        { success: false, error: "No active Gemini API accounts configured in Admin Settings." },
+        { status: 400 }
+      );
+    }
 
     const batchLimitSetting = await AdminSetting.findOne({
       key: "individualCronBatchSize",
@@ -64,8 +74,9 @@ export async function GET(request: NextRequest) {
     const minDelaySec = minDelaySetting && !isNaN(Number(minDelaySetting.value)) ? Math.max(0, Number(minDelaySetting.value)) : 30;
     const maxDelaySec = maxDelaySetting && !isNaN(Number(maxDelaySetting.value)) ? Math.max(minDelaySec, Number(maxDelaySetting.value)) : 150;
 
-    // Find individual books flagged for AI content generation, limited to batchLimit
-    const pendingBooks = await IndividualBook.find({ needsContentGeneration: true }).limit(batchLimit);
+    // Find individual books flagged for AI content generation, limited to totalBooksLimit (for Gemini) or batchLimit
+    const effectiveLimit = scraperEngine === "gemini" && geminiConfig ? geminiConfig.totalBooksLimit : batchLimit;
+    const pendingBooks = await IndividualBook.find({ needsContentGeneration: true }).limit(effectiveLimit);
 
     if (pendingBooks.length === 0) {
       return NextResponse.json({
@@ -90,88 +101,124 @@ export async function GET(request: NextRequest) {
     const scriptName = scraperEngine === "chatgpt" ? "chatgptScraper.mjs" : "deepseekScraper.mjs";
     const scriptPath = path.join(process.cwd(), "scripts", scriptName);
 
-    for (const book of pendingBooks) {
-      if (isCronAborted(LOCK_KEY)) {
-        console.log("[Cron Individual AI] Aborted by admin kill request.");
-        break;
+    const buildPrompt = (book: any) => {
+      const topicVal = book.topic || "General";
+      const titleVal = book.title || "";
+      const authorVal = book.author || "";
+      const contentTypeVal = "Single Book Summary";
+
+      let populatedPrompt = template
+        .replace(/\{\{topic\}\}/gi, topicVal)
+        .replace(/\{\{title\}\}/gi, titleVal)
+        .replace(/\{\{books\}\}/gi, titleVal)
+        .replace(/\{\{author\}\}/gi, authorVal)
+        .replace(/\{\{contentType\}\}/gi, contentTypeVal)
+        .replace(/\{\{audience\}\}/gi, "US/Western adults")
+        .replace(/\{\{targetLength\}\}/gi, "~2000 words(1800-2300 words)")
+        .replace(/\{\{goal\}\}/gi, "[You decided by yourself, I dont know].");
+
+      const topSlice = populatedPrompt.slice(0, 600);
+      const hasTopicAtTop = /^\s*(?:>\s*)?\*\*Topic/im.test(topSlice);
+      const hasTitleAtTop = /^\s*(?:>\s*)?\*\*(?:Book|Title)/im.test(topSlice);
+      if (!hasTopicAtTop || !hasTitleAtTop) {
+        const headerLines: string[] = [
+          `**Topic:** ${topicVal}`,
+          `**Book:** ${titleVal}`,
+        ];
+        if (authorVal) {
+          headerLines.push(`**Author:** ${authorVal}`);
+        }
+        if (!/^\s*(?:>\s*)?\*\*Content Type:\*\*/im.test(topSlice)) {
+          headerLines.push(`**Content Type:** ${contentTypeVal}`);
+        }
+        populatedPrompt = headerLines.join("\n\n") + "\n\n" + populatedPrompt.trimStart();
       }
-      try {
-        const topicVal = book.topic || "General";
-        const titleVal = book.title || "";
-        const authorVal = book.author || "";
-        const contentTypeVal = "Single Book Summary";
+      return populatedPrompt;
+    };
 
-        let populatedPrompt = template
-          .replace(/\{\{topic\}\}/gi, topicVal)
-          .replace(/\{\{title\}\}/gi, titleVal)
-          .replace(/\{\{books\}\}/gi, titleVal)
-          .replace(/\{\{author\}\}/gi, authorVal)
-          .replace(/\{\{contentType\}\}/gi, contentTypeVal)
-          .replace(/\{\{audience\}\}/gi, "US/Western adults")
-          .replace(/\{\{targetLength\}\}/gi, "~2000 words(1800-2300 words)")
-          .replace(/\{\{goal\}\}/gi, "[You decided by yourself, I dont know].");
+    if (scraperEngine === "gemini" && geminiConfig) {
+      const { accounts, concurrencyLimit } = geminiConfig;
+      for (let i = 0; i < pendingBooks.length; i += concurrencyLimit) {
+        if (isCronAborted(LOCK_KEY)) {
+          console.log("[Cron Individual AI] Aborted by admin kill request.");
+          break;
+        }
+        const chunk = pendingBooks.slice(i, i + concurrencyLimit);
+        await Promise.all(
+          chunk.map(async (book, offset) => {
+            const account = accounts[(i + offset) % accounts.length];
+            try {
+              console.log(`[Cron Individual AI] Generating content for "${book.title}" via Gemini (${account.label} / ${account.model})...`);
+              const generatedContent = await generateWithGemini(account, buildPrompt(book));
+              await IndividualBook.findByIdAndUpdate(book._id, {
+                pendingContent: generatedContent,
+                pendingContentGeneratedAt: new Date(),
+                contentStatus: "PENDING_REVIEW",
+                needsContentGeneration: false,
+              });
+              results.push({ id: book._id.toString(), title: book.title, success: true });
+              console.log(`[Cron Individual AI] Completed "${book.title}" via Gemini.`);
+            } catch (err: any) {
+              console.error(`[Cron Individual AI Error] Failed for "${book.title}" (Gemini):`, err.message);
+              results.push({ id: book._id.toString(), title: book.title, success: false, error: err.message });
+            }
+          })
+        );
+      }
+    } else {
+      for (const book of pendingBooks) {
+        if (isCronAborted(LOCK_KEY)) {
+          console.log("[Cron Individual AI] Aborted by admin kill request.");
+          break;
+        }
+        try {
+          const populatedPrompt = buildPrompt(book);
 
-        const topSlice = populatedPrompt.slice(0, 600);
-        const hasTopicAtTop = /^\s*(?:>\s*)?\*\*Topic/im.test(topSlice);
-        const hasTitleAtTop = /^\s*(?:>\s*)?\*\*(?:Book|Title)/im.test(topSlice);
-        if (!hasTopicAtTop || !hasTitleAtTop) {
-          const headerLines: string[] = [
-            `**Topic:** ${topicVal}`,
-            `**Book:** ${titleVal}`,
-          ];
-          if (authorVal) {
-            headerLines.push(`**Author:** ${authorVal}`);
+          console.log(`[Cron Individual AI] Generating content for "${book.title}" via ${scraperEngine}...`);
+
+          const { stdout } = await runLockedScraper(LOCK_KEY, scriptPath, populatedPrompt);
+
+          const startMarker = scraperEngine === "chatgpt" ? "--- ChatGPT Response ---\n\n" : "--- DeepSeek Response ---\n\n";
+          const endMarker = "\n\n-------------------------";
+          let generatedContent = "";
+
+          const startIndex = stdout.indexOf(startMarker);
+          const endIndex = stdout.indexOf(endMarker);
+
+          if (startIndex !== -1 && endIndex !== -1) {
+            generatedContent = stdout.substring(startIndex + startMarker.length, endIndex).trim();
+          } else {
+            generatedContent = stdout.trim();
           }
-          if (!/^\s*(?:>\s*)?\*\*Content Type:\*\*/im.test(topSlice)) {
-            headerLines.push(`**Content Type:** ${contentTypeVal}`);
+
+          if (!generatedContent) {
+            throw new Error("Empty response from scraper");
           }
-          populatedPrompt = headerLines.join("\n\n") + "\n\n" + populatedPrompt.trimStart();
+
+          // Update book with pending content, set contentStatus to PENDING_REVIEW, and clear the cron flag
+          await IndividualBook.findByIdAndUpdate(book._id, {
+            pendingContent: generatedContent,
+            pendingContentGeneratedAt: new Date(),
+            contentStatus: "PENDING_REVIEW",
+            needsContentGeneration: false,
+          });
+
+          results.push({ id: book._id.toString(), title: book.title, success: true });
+          console.log(`[Cron Individual AI] Completed "${book.title}". Browser closed cleanly.`);
+
+          // Anti-bot randomized pause between sequential scrapings if there are more books in this batch
+          if (results.length < pendingBooks.length) {
+            const randomDelaySec = Math.floor(Math.random() * (maxDelaySec - minDelaySec + 1)) + minDelaySec;
+            console.log(`[Cron Individual AI] Anti-bot human delay: waiting ${randomDelaySec}s (${(randomDelaySec / 60).toFixed(1)} mins) before processing next book...`);
+            await new Promise((resolve) => setTimeout(resolve, randomDelaySec * 1000));
+          } else {
+            // Minimal 3s cooldown after the last book in the batch
+            await new Promise((resolve) => setTimeout(resolve, 3000));
+          }
+        } catch (err: any) {
+          console.error(`[Cron Individual AI Error] Failed for "${book.title}":`, err.message);
+          results.push({ id: book._id.toString(), title: book.title, success: false, error: err.message });
         }
-
-        console.log(`[Cron Individual AI] Generating content for "${book.title}" via ${scraperEngine}...`);
-
-        const { stdout } = await runLockedScraper(LOCK_KEY, scriptPath, populatedPrompt);
-
-        const startMarker = scraperEngine === "chatgpt" ? "--- ChatGPT Response ---\n\n" : "--- DeepSeek Response ---\n\n";
-        const endMarker = "\n\n-------------------------";
-        let generatedContent = "";
-
-        const startIndex = stdout.indexOf(startMarker);
-        const endIndex = stdout.indexOf(endMarker);
-
-        if (startIndex !== -1 && endIndex !== -1) {
-          generatedContent = stdout.substring(startIndex + startMarker.length, endIndex).trim();
-        } else {
-          generatedContent = stdout.trim();
-        }
-
-        if (!generatedContent) {
-          throw new Error("Empty response from scraper");
-        }
-
-        // Update book with pending content, set contentStatus to PENDING_REVIEW, and clear the cron flag
-        await IndividualBook.findByIdAndUpdate(book._id, {
-          pendingContent: generatedContent,
-          pendingContentGeneratedAt: new Date(),
-          contentStatus: "PENDING_REVIEW",
-          needsContentGeneration: false,
-        });
-
-        results.push({ id: book._id.toString(), title: book.title, success: true });
-        console.log(`[Cron Individual AI] Completed "${book.title}". Browser closed cleanly.`);
-
-        // Anti-bot randomized pause between sequential scrapings if there are more books in this batch
-        if (results.length < pendingBooks.length) {
-          const randomDelaySec = Math.floor(Math.random() * (maxDelaySec - minDelaySec + 1)) + minDelaySec;
-          console.log(`[Cron Individual AI] Anti-bot human delay: waiting ${randomDelaySec}s (${(randomDelaySec / 60).toFixed(1)} mins) before processing next book...`);
-          await new Promise((resolve) => setTimeout(resolve, randomDelaySec * 1000));
-        } else {
-          // Minimal 3s cooldown after the last book in the batch
-          await new Promise((resolve) => setTimeout(resolve, 3000));
-        }
-      } catch (err: any) {
-        console.error(`[Cron Individual AI Error] Failed for "${book.title}":`, err.message);
-        results.push({ id: book._id.toString(), title: book.title, success: false, error: err.message });
       }
     }
 

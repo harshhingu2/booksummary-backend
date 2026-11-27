@@ -2,16 +2,29 @@
 
 import React, { useState, useEffect } from "react";
 
+type ScraperEngine = "deepseek" | "chatgpt" | "gemini";
+
+interface GeminiAccountItem {
+  id: string;
+  label: string;
+  apiKey: string;
+  model: string;
+  isActive: boolean;
+}
+
 interface SettingsState {
-  defaultAiScraper: "deepseek" | "chatgpt";
-  individualAiScraper: "deepseek" | "chatgpt";
+  defaultAiScraper: ScraperEngine;
+  individualAiScraper: ScraperEngine;
   individualCronBatchSize: number;
   individualCronMinDelaySeconds: number;
   individualCronMaxDelaySeconds: number;
-  multibookAiScraper: "deepseek" | "chatgpt";
+  multibookAiScraper: ScraperEngine;
   multibookCronBatchSize: number;
   multibookCronMinDelaySeconds: number;
   multibookCronMaxDelaySeconds: number;
+  geminiConcurrencyLimit: number;
+  geminiTotalBooksLimit: number;
+  geminiAccounts: GeminiAccountItem[];
 }
 
 export default function AdminSettingsPage() {
@@ -25,6 +38,12 @@ export default function AdminSettingsPage() {
     multibookCronBatchSize: 5,
     multibookCronMinDelaySeconds: 30,
     multibookCronMaxDelaySeconds: 150,
+    geminiConcurrencyLimit: 2,
+    geminiTotalBooksLimit: 10,
+    geminiAccounts: [
+      { id: "acc-1", label: "Account 1", apiKey: "", model: "gemini-2.5-flash", isActive: true },
+      { id: "acc-2", label: "Account 2", apiKey: "", model: "gemini-2.5-flash", isActive: true },
+    ],
   });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -46,6 +65,14 @@ export default function AdminSettingsPage() {
           multibookCronBatchSize: Number(data.settings.multibookCronBatchSize) || 5,
           multibookCronMinDelaySeconds: Number(data.settings.multibookCronMinDelaySeconds) ?? 30,
           multibookCronMaxDelaySeconds: Number(data.settings.multibookCronMaxDelaySeconds) ?? 150,
+          geminiConcurrencyLimit: Number(data.settings.geminiConcurrencyLimit) || 2,
+          geminiTotalBooksLimit: Number(data.settings.geminiTotalBooksLimit) || 10,
+          geminiAccounts: Array.isArray(data.settings.geminiAccounts) && data.settings.geminiAccounts.length > 0
+            ? data.settings.geminiAccounts
+            : [
+                { id: "acc-1", label: "Account 1", apiKey: "", model: "gemini-2.5-flash", isActive: true },
+                { id: "acc-2", label: "Account 2", apiKey: "", model: "gemini-2.5-flash", isActive: true },
+              ],
         });
       }
     } catch (err) {
@@ -174,6 +201,31 @@ export default function AdminSettingsPage() {
                   </div>
                   <div style={{ color: "#94A3B8", fontSize: "0.8rem", marginTop: "2px" }}>
                     Uses chatgpt.com via logged-in persistent profile.
+                  </div>
+                </div>
+              </label>
+
+              <label
+                style={{
+                  ...styles.radioCard,
+                  borderColor: settings.individualAiScraper === "gemini" ? "#38BDF8" : "#334155",
+                  backgroundColor: settings.individualAiScraper === "gemini" ? "rgba(56, 189, 248, 0.12)" : "#0F172A",
+                }}
+              >
+                <input
+                  type="radio"
+                  name="individualAiScraper"
+                  value="gemini"
+                  checked={settings.individualAiScraper === "gemini"}
+                  onChange={() => setSettings({ ...settings, individualAiScraper: "gemini" })}
+                  style={{ cursor: "pointer" }}
+                />
+                <div>
+                  <div style={{ fontWeight: 700, color: "#F8FAFC", fontSize: "0.95rem" }}>
+                    ✨ Gemini API (Zero RAM)
+                  </div>
+                  <div style={{ color: "#94A3B8", fontSize: "0.8rem", marginTop: "2px" }}>
+                    Uses official Google Gemini API with multi-account rotation &amp; concurrency. No browser/CAPTCHAs.
                   </div>
                 </div>
               </label>
@@ -327,6 +379,31 @@ export default function AdminSettingsPage() {
                   </div>
                 </div>
               </label>
+
+              <label
+                style={{
+                  ...styles.radioCard,
+                  borderColor: settings.multibookAiScraper === "gemini" ? "#38BDF8" : "#334155",
+                  backgroundColor: settings.multibookAiScraper === "gemini" ? "rgba(56, 189, 248, 0.12)" : "#0F172A",
+                }}
+              >
+                <input
+                  type="radio"
+                  name="multibookAiScraper"
+                  value="gemini"
+                  checked={settings.multibookAiScraper === "gemini"}
+                  onChange={() => setSettings({ ...settings, multibookAiScraper: "gemini" })}
+                  style={{ cursor: "pointer" }}
+                />
+                <div>
+                  <div style={{ fontWeight: 700, color: "#F8FAFC", fontSize: "0.95rem" }}>
+                    ✨ Gemini API (Zero RAM)
+                  </div>
+                  <div style={{ color: "#94A3B8", fontSize: "0.8rem", marginTop: "2px" }}>
+                    Uses official Google Gemini API with multi-account rotation &amp; concurrency. No browser/CAPTCHAs.
+                  </div>
+                </div>
+              </label>
             </div>
 
             <div style={{ marginTop: "14px", display: "flex", alignItems: "center", gap: "12px", flexWrap: "wrap" }}>
@@ -419,6 +496,220 @@ export default function AdminSettingsPage() {
               <span style={{ fontSize: "0.78rem", color: "#64748B" }}>
                 (Default: 30s to 150s. Randomized pauses between processing queued syntheses)
               </span>
+            </div>
+          </div>
+
+          {/* Gemini API Configuration */}
+          <div style={{ ...styles.fieldGroup, marginTop: "28px", paddingTop: "24px", borderTop: "1px solid #334155" }}>
+            <label style={styles.label}>✨ Gemini API Configuration (Free Tier &amp; Multi-Account)</label>
+            <p style={styles.fieldHint}>
+              Used when <strong>Gemini API</strong> is selected above. Active accounts are rotated round-robin. No Chromium RAM or CAPTCHAs.
+            </p>
+
+            <div style={{ display: "flex", gap: "20px", flexWrap: "wrap", marginBottom: "18px" }}>
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <label style={{ fontSize: "0.85rem", color: "#CBD5E1", fontWeight: 600 }}>
+                  Concurrent Requests Limit:
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  max={20}
+                  value={settings.geminiConcurrencyLimit}
+                  onChange={(e) =>
+                    setSettings({
+                      ...settings,
+                      geminiConcurrencyLimit: Math.max(1, Math.min(20, parseInt(e.target.value, 10) || 1)),
+                    })
+                  }
+                  style={{
+                    width: "80px",
+                    padding: "6px 10px",
+                    backgroundColor: "#0F172A",
+                    border: "1px solid #334155",
+                    borderRadius: "6px",
+                    color: "#F8FAFC",
+                    fontSize: "0.9rem",
+                    fontWeight: 600,
+                  }}
+                />
+              </div>
+
+              <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                <label style={{ fontSize: "0.85rem", color: "#CBD5E1", fontWeight: 600 }}>
+                  Total Books Limit (Gemini only):
+                </label>
+                <input
+                  type="number"
+                  min={1}
+                  max={100}
+                  value={settings.geminiTotalBooksLimit}
+                  onChange={(e) =>
+                    setSettings({
+                      ...settings,
+                      geminiTotalBooksLimit: Math.max(1, Math.min(100, parseInt(e.target.value, 10) || 1)),
+                    })
+                  }
+                  style={{
+                    width: "80px",
+                    padding: "6px 10px",
+                    backgroundColor: "#0F172A",
+                    border: "1px solid #334155",
+                    borderRadius: "6px",
+                    color: "#F8FAFC",
+                    fontSize: "0.9rem",
+                    fontWeight: 600,
+                  }}
+                />
+              </div>
+            </div>
+
+            <div style={{ display: "flex", flexDirection: "column", gap: "12px" }}>
+              {settings.geminiAccounts.map((acc, idx) => (
+                <div
+                  key={acc.id || idx}
+                  style={{
+                    padding: "14px",
+                    backgroundColor: "#0F172A",
+                    border: "1px solid #334155",
+                    borderRadius: "10px",
+                    display: "flex",
+                    flexDirection: "column",
+                    gap: "10px",
+                  }}
+                >
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: "10px", flexWrap: "wrap" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                      <input
+                        type="checkbox"
+                        checked={acc.isActive !== false}
+                        onChange={(e) => {
+                          const updated = [...settings.geminiAccounts];
+                          updated[idx] = { ...acc, isActive: e.target.checked };
+                          setSettings({ ...settings, geminiAccounts: updated });
+                        }}
+                        title="Enable/disable this account"
+                      />
+                      <input
+                        type="text"
+                        value={acc.label}
+                        placeholder={`Account ${idx + 1}`}
+                        onChange={(e) => {
+                          const updated = [...settings.geminiAccounts];
+                          updated[idx] = { ...acc, label: e.target.value };
+                          setSettings({ ...settings, geminiAccounts: updated });
+                        }}
+                        style={{
+                          padding: "6px 10px",
+                          backgroundColor: "#1E293B",
+                          border: "1px solid #334155",
+                          borderRadius: "6px",
+                          color: "#F8FAFC",
+                          fontSize: "0.85rem",
+                          fontWeight: 600,
+                          width: "160px",
+                        }}
+                      />
+                    </div>
+                    {settings.geminiAccounts.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const updated = settings.geminiAccounts.filter((_, i) => i !== idx);
+                          setSettings({ ...settings, geminiAccounts: updated });
+                        }}
+                        style={{
+                          backgroundColor: "rgba(239, 68, 68, 0.15)",
+                          color: "#FCA5A5",
+                          border: "1px solid rgba(239, 68, 68, 0.3)",
+                          borderRadius: "6px",
+                          padding: "4px 10px",
+                          fontSize: "0.8rem",
+                          cursor: "pointer",
+                        }}
+                      >
+                        Remove
+                      </button>
+                    )}
+                  </div>
+
+                  <div style={{ display: "flex", gap: "10px", flexWrap: "wrap" }}>
+                    <input
+                      type="password"
+                      value={acc.apiKey}
+                      placeholder="Gemini API Key (AIza...)"
+                      onChange={(e) => {
+                        const updated = [...settings.geminiAccounts];
+                        updated[idx] = { ...acc, apiKey: e.target.value };
+                        setSettings({ ...settings, geminiAccounts: updated });
+                      }}
+                      style={{
+                        flex: 1,
+                        minWidth: "240px",
+                        padding: "8px 10px",
+                        backgroundColor: "#1E293B",
+                        border: "1px solid #334155",
+                        borderRadius: "6px",
+                        color: "#F8FAFC",
+                        fontSize: "0.85rem",
+                      }}
+                    />
+                    <input
+                      type="text"
+                      value={acc.model}
+                      placeholder="e.g. gemini-2.5-flash or gemini-2.5-pro"
+                      onChange={(e) => {
+                        const updated = [...settings.geminiAccounts];
+                        updated[idx] = { ...acc, model: e.target.value };
+                        setSettings({ ...settings, geminiAccounts: updated });
+                      }}
+                      style={{
+                        width: "220px",
+                        padding: "8px 10px",
+                        backgroundColor: "#1E293B",
+                        border: "1px solid #334155",
+                        borderRadius: "6px",
+                        color: "#F8FAFC",
+                        fontSize: "0.85rem",
+                      }}
+                    />
+                  </div>
+                </div>
+              ))}
+
+              <div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const nextNum = settings.geminiAccounts.length + 1;
+                    setSettings({
+                      ...settings,
+                      geminiAccounts: [
+                        ...settings.geminiAccounts,
+                        {
+                          id: `acc-${Date.now()}`,
+                          label: `Account ${nextNum}`,
+                          apiKey: "",
+                          model: "gemini-2.5-flash",
+                          isActive: true,
+                        },
+                      ],
+                    });
+                  }}
+                  style={{
+                    backgroundColor: "rgba(56, 189, 248, 0.15)",
+                    color: "#38BDF8",
+                    border: "1px solid rgba(56, 189, 248, 0.35)",
+                    borderRadius: "8px",
+                    padding: "8px 14px",
+                    fontSize: "0.85rem",
+                    fontWeight: 600,
+                    cursor: "pointer",
+                  }}
+                >
+                  + Add Gemini Account
+                </button>
+              </div>
             </div>
           </div>
 

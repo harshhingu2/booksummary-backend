@@ -53,6 +53,21 @@ const DEFAULT_SETTINGS: Record<string, { value: any; description: string }> = {
     value: 150,
     description: "Maximum random delay in seconds between scraping multi-book syntheses (anti-bot protection)",
   },
+  geminiConcurrencyLimit: {
+    value: 2,
+    description: "Number of concurrent Gemini API requests per batch",
+  },
+  geminiTotalBooksLimit: {
+    value: 10,
+    description: "Max total books/summaries processed per Gemini cron run",
+  },
+  geminiAccounts: {
+    value: [
+      { id: "acc-1", label: "Account 1", apiKey: "", model: "gemini-2.5-flash", isActive: true },
+      { id: "acc-2", label: "Account 2", apiKey: "", model: "gemini-2.5-flash", isActive: true },
+    ],
+    description: "List of Gemini API accounts (rotated round-robin)",
+  },
 };
 
 export async function GET() {
