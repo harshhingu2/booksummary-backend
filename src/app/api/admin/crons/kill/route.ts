@@ -14,8 +14,9 @@ export async function POST() {
 
   const ind = killCronLock("__individualCronLock");
   const multi = killCronLock("__multibookCronLock");
+  const audio = killCronLock("__audioCronLock");
 
-  if (!ind.killed && !multi.killed) {
+  if (!ind.killed && !multi.killed && !audio.killed) {
     return NextResponse.json({
       success: true,
       killed: false,

@@ -455,7 +455,7 @@ export default function AdminCronsPage() {
                     >
                       {runningId === job._id ? "Running..." : "▶️ Run Now"}
                     </button>
-                    {(job.endpoint.includes("individual-content") || job.endpoint.includes("multibook-content")) && (
+                    {(job.endpoint.includes("individual-content") || job.endpoint.includes("multibook-content") || job.endpoint.includes("audio-generation")) && (
                       <button
                         onClick={() => setKillTarget({ id: job._id, name: job.name })}
                         style={{

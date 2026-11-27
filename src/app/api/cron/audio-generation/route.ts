@@ -7,6 +7,9 @@ import { IndividualBook } from "@/models/IndividualBook";
 import { AdminSetting } from "@/models/AdminSetting";
 import { generateAndUploadBookAudio } from "@/lib/audioGenerator";
 import { deleteFromR2 } from "@/lib/r2";
+import { acquireCronLock, isCronAborted, releaseCronLock } from "@/lib/cronLock";
+
+const LOCK_KEY = "__audioCronLock";
 
 export async function GET(request: NextRequest) {
   const authHeader = request.headers.get("authorization");
@@ -14,6 +17,13 @@ export async function GET(request: NextRequest) {
 
   if (authHeader !== `Bearer ${cronSecret}`) {
     return NextResponse.json({ success: false, error: "Unauthorized" }, { status: 401 });
+  }
+
+  if (!acquireCronLock(LOCK_KEY)) {
+    return NextResponse.json(
+      { success: false, message: "Audio generation cron is already running. Skipping overlapping trigger." },
+      { status: 409 }
+    );
   }
 
   try {
@@ -58,6 +68,10 @@ export async function GET(request: NextRequest) {
 
     // Process in concurrent chunks
     for (let i = 0; i < books.length; i += concurrency) {
+      if (isCronAborted(LOCK_KEY)) {
+        console.log("[Audio Cron] Aborted by admin kill request.");
+        break;
+      }
       const chunk = books.slice(i, i + concurrency);
 
       await Promise.allSettled(
@@ -94,6 +108,7 @@ export async function GET(request: NextRequest) {
             succeeded++;
           } catch (err: any) {
             const errMsg = err?.message || "Audio generation failed";
+            console.error(`[Audio Cron Error] Failed for "${book.title}":`, errMsg);
             book.audioStatus = "FAILED";
             book.audioError = errMsg;
             await book.save();
@@ -114,5 +129,7 @@ export async function GET(request: NextRequest) {
     });
   } catch (error: any) {
     return NextResponse.json({ success: false, error: error.message }, { status: 500 });
+  } finally {
+    releaseCronLock(LOCK_KEY);
   }
 }
