@@ -1156,6 +1156,12 @@ Please format your response strictly in clean HTML tags (using <h2>, <h3>, <p>, 
         </div>
       </div>
 
+      <div style={{ marginBottom: "10px", color: "#94A3B8", fontSize: "0.875rem", fontWeight: 600 }}>
+        {totalBooks > 0
+          ? `Showing ${(page - 1) * limit + 1}–${Math.min(page * limit, totalBooks)} of ${totalBooks} books`
+          : "Showing 0 books"}
+      </div>
+
       <div style={styles.tableContainer}>
         {loading ? (
           <p style={{ padding: "24px", color: "#94A3B8" }}>Loading books library...</p>
