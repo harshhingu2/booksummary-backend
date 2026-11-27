@@ -158,6 +158,9 @@ export async function GET(request: NextRequest) {
           } catch (err: any) {
             console.error(`[Cron Individual AI Error] Failed for "${book.title}" (Gemini / ${account.label}):`, err.message);
             results.push({ id: book._id.toString(), title: book.title, success: false, error: err.message });
+            if (String(err?.message || "").includes("HTTP 429")) {
+              throw err;
+            }
           }
         }
       );

@@ -153,6 +153,9 @@ export async function GET(request: NextRequest) {
           } catch (err: any) {
             console.error(`[Cron MultiBook AI Error] Failed for "${summary.title}" (Gemini / ${account.label}):`, err.message);
             results.push({ id: summary._id.toString(), title: summary.title, success: false, error: err.message });
+            if (String(err?.message || "").includes("HTTP 429")) {
+              throw err;
+            }
           }
         }
       );

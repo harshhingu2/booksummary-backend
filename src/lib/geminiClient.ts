@@ -127,15 +127,22 @@ export async function runGeminiWorkerPool<T extends { _id: any }>(
 
   const workers: Promise<void>[] = [];
   for (const account of accounts) {
+    let accountExhausted = false;
     for (let w = 0; w < concurrencyPerAccount; w++) {
       workers.push(
         (async () => {
-          while (!isAborted()) {
+          while (!isAborted() && !accountExhausted) {
             const item = claimNextItem();
             if (!item) break;
             const id = item._id.toString();
             try {
               await processItem(item, account);
+              // Minimal 100ms pacing between requests
+              await new Promise((r) => setTimeout(r, 100));
+            } catch (err: any) {
+              if (String(err?.message || "").includes("HTTP 429")) {
+                accountExhausted = true;
+              }
             } finally {
               activeSet.delete(id);
             }
