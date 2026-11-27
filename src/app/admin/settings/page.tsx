@@ -654,25 +654,28 @@ export default function AdminSettingsPage() {
                         fontSize: "0.85rem",
                       }}
                     />
-                    <input
-                      type="text"
+                    <select
                       value={acc.model}
-                      placeholder="e.g. gemini-2.5-flash or gemini-2.5-pro"
                       onChange={(e) => {
                         const updated = [...settings.geminiAccounts];
                         updated[idx] = { ...acc, model: e.target.value };
                         setSettings({ ...settings, geminiAccounts: updated });
                       }}
                       style={{
-                        width: "220px",
+                        width: "260px",
                         padding: "8px 10px",
                         backgroundColor: "#1E293B",
                         border: "1px solid #334155",
                         borderRadius: "6px",
                         color: "#F8FAFC",
                         fontSize: "0.85rem",
+                        cursor: "pointer",
                       }}
-                    />
+                    >
+                      <option value="gemini-2.5-pro">gemini-2.5-pro — Best quality (~50–100/day free)</option>
+                      <option value="gemini-2.5-flash">gemini-2.5-flash — Medium quality (~250–1,500/day free)</option>
+                      <option value="gemini-2.5-flash-lite">gemini-2.5-flash-lite — Fast / Basic quality (~1,000+/day free)</option>
+                    </select>
                   </div>
                 </div>
               ))}
